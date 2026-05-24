@@ -2,6 +2,16 @@ apiVersion: v1
 entries:
   packvault:
   - apiVersion: v2
+    appVersion: v0.1.1
+    created: "2026-05-24T07:57:40.55802104Z"
+    description: Secure Maven package hosting over local or S3-compatible storage
+    digest: 0a59e7c65998f11c30b7646db0083f9c525cc6ed5d8c202d87461c98e7de03a7
+    name: packvault
+    type: application
+    urls:
+    - https://github.com/abhinav1107/packvault/releases/download/packvault-0.1.1/packvault-0.1.1.tgz
+    version: 0.1.1
+  - apiVersion: v2
     appVersion: v0.1.0
     created: "2026-05-24T06:41:23.834290228Z"
     description: Secure Maven package hosting over local or S3-compatible storage
@@ -11,4 +21,4 @@ entries:
     urls:
     - https://github.com/abhinav1107/packvault/releases/download/packvault-0.1.0/packvault-0.1.0.tgz
     version: 0.1.0
-generated: "2026-05-24T06:41:23.834296617Z"
+generated: "2026-05-24T07:57:40.558028894Z"
