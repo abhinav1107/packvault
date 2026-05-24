@@ -54,10 +54,10 @@ http://localhost:8080/snapshots
 
 Gradle uses HTTP Basic authentication.
 
-| Field | Value |
-|---|---|
+| Field    | Value                |
+|----------|----------------------|
 | Username | PackVault token name |
-| Password | raw token secret |
+| Password | raw token secret     |
 
 Example:
 
@@ -188,10 +188,10 @@ dependencies {
 
 Use a token with the correct permission on the target repository.
 
-| Action | Required permission |
-|---|---|
-| publish/upload | `write` |
-| resolve/download | `read` |
+| Action           | Required permission |
+|------------------|---------------------|
+| publish/upload   | `write`             |
+| resolve/download | `read`              |
 
 A reader token cannot publish. A publisher token should usually have both `read` and `write` for the target repository.
 
@@ -199,9 +199,9 @@ A reader token cannot publish. A publisher token should usually have both `read`
 
 Default PackVault policy:
 
-| Repository | Overwrite behavior |
-|---|---|
-| `releases` | overwrite blocked; returns `409 Conflict` |
-| `snapshots` | overwrite allowed |
+| Repository  | Overwrite behavior                        |
+|-------------|-------------------------------------------|
+| `releases`  | overwrite blocked; returns `409 Conflict` |
+| `snapshots` | overwrite allowed                         |
 
 This means release versions should be unique. Snapshot versions may be republished.

@@ -18,19 +18,19 @@ PackVault is intended to be internet-facing, so its defaults are intentionally c
 
 ## Current security defaults
 
-| Area | Default |
-|---|---|
-| Anonymous write | never supported |
-| Anonymous read | disabled |
-| DELETE | not supported in v1 |
-| Release overwrite | blocked by default |
-| Snapshot overwrite | allowed by default |
-| Maven client auth | HTTP Basic using token name + raw token |
-| Token storage | SHA-256 token hashes |
-| Local UI password storage | Argon2 password hashes |
-| Path validation | strict Maven path validation |
-| Directory listing | not supported |
-| Write audit logging | enabled |
+| Area                      | Default                                 |
+|---------------------------|-----------------------------------------|
+| Anonymous write           | never supported                         |
+| Anonymous read            | disabled                                |
+| DELETE                    | not supported in v1                     |
+| Release overwrite         | blocked by default                      |
+| Snapshot overwrite        | allowed by default                      |
+| Maven client auth         | HTTP Basic using token name + raw token |
+| Token storage             | SHA-256 token hashes                    |
+| Local UI password storage | Argon2 password hashes                  |
+| Path validation           | strict Maven path validation            |
+| Directory listing         | not supported                           |
+| Write audit logging       | enabled                                 |
 
 ## Authentication model
 
@@ -56,9 +56,9 @@ Used by build tools and CI/CD.
 
 Maven and Gradle use HTTP Basic authentication:
 
-| Field | Value |
-|---|---|
-| Username | token name |
+| Field    | Value            |
+|----------|------------------|
+| Username | token name       |
 | Password | raw token secret |
 
 PackVault stores only the token hash:

@@ -212,7 +212,7 @@ autoscaling:
   minReplicas: 1
   maxReplicas: 3
   targetCPUUtilizationPercentage: 80
-  # targetMemoryUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
 
 resources: {}
 # We usually recommend not to specify default resources and to leave this as a conscious

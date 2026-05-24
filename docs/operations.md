@@ -54,18 +54,18 @@ These are acceptable for local development only. Change them in `.env` for anyth
 
 ## Health endpoints
 
-| Endpoint | Kubernetes probe | Purpose |
-|---|---|---|
-| `/startupz` | `startupProbe` | one-time startup completed |
-| `/livez` | `livenessProbe` | process is alive; no dependency I/O |
-| `/readyz` | `readinessProbe` | safe to serve traffic; checks storage |
-| `/metrics` | Prometheus scrape | metrics endpoint |
+| Endpoint    | Kubernetes probe  | Purpose                               |
+|-------------|-------------------|---------------------------------------|
+| `/startupz` | `startupProbe`    | one-time startup completed            |
+| `/livez`    | `livenessProbe`   | process is alive; no dependency I/O   |
+| `/readyz`   | `readinessProbe`  | safe to serve traffic; checks storage |
+| `/metrics`  | Prometheus scrape | metrics endpoint                      |
 
 Responses use:
 
-| State | HTTP |
-|---|---:|
-| healthy | `200` |
+| State               |  HTTP |
+|---------------------|------:|
+| healthy             | `200` |
 | unhealthy/not ready | `503` |
 
 Example:
@@ -92,12 +92,12 @@ Expected healthy responses:
 
 ## Typical runtime behavior
 
-| Condition | `/livez` | `/startupz` | `/readyz` |
-|---|---:|---:|---:|
-| process running normally | `200` | `200` | `200` |
-| startup not complete | `200` | `503` | `503` |
-| storage unavailable | `200` | `200` | `503` |
-| shutting down | `503` | `200` | `503` |
+| Condition                | `/livez` | `/startupz` | `/readyz` |
+|--------------------------|---------:|------------:|----------:|
+| process running normally |    `200` |       `200` |     `200` |
+| startup not complete     |    `200` |       `503` |     `503` |
+| storage unavailable      |    `200` |       `200` |     `503` |
+| shutting down            |    `503` |       `200` |     `503` |
 
 A temporary S3 or MinIO issue should make `/readyz` fail, but should not cause liveness restarts.
 

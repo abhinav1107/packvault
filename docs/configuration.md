@@ -36,10 +36,10 @@ server:
 
 ### When to use this vs `PACKVAULT_` env overrides
 
-| Mechanism | Best for |
-|-----------|----------|
-| `${env.VAR}` in YAML | Secrets and values injected by Kubernetes/Docker (`secretKeyRef`, `envFrom`) without duplicating key names in a second naming scheme |
-| `PACKVAULT_*` env vars | Overriding individual settings without editing YAML (Pydantic nested keys, e.g. `PACKVAULT_SERVER__PORT=9090`) |
+| Mechanism              | Best for                                                                                                                             |
+|------------------------|--------------------------------------------------------------------------------------------------------------------------------------|
+| `${env.VAR}` in YAML   | Secrets and values injected by Kubernetes/Docker (`secretKeyRef`, `envFrom`) without duplicating key names in a second naming scheme |
+| `PACKVAULT_*` env vars | Overriding individual settings without editing YAML (Pydantic nested keys, e.g. `PACKVAULT_SERVER__PORT=9090`)                       |
 
 Both can be used together: YAML provides structure; `${env.*}` fills in secrets; `PACKVAULT_*` can still override at runtime.
 
@@ -58,10 +58,10 @@ Examples:
 - `https://packvault.example/releases/com/acme/foo/1.0.0/foo-1.0.0.jar`
 - `https://packvault.example/snapshots/com/acme/foo/maven-metadata.xml`
 
-| Part | Meaning |
-|------|---------|
-| `<repositoryName>` | Configured repository (`releases`, `snapshots`, …) |
-| `<mavenPath>` | Standard Maven path: `groupId/as/path/artifact/version/file` |
+| Part               | Meaning                                                      |
+|--------------------|--------------------------------------------------------------|
+| `<repositoryName>` | Configured repository (`releases`, `snapshots`, …)           |
+| `<mavenPath>`      | Standard Maven path: `groupId/as/path/artifact/version/file` |
 
 Object storage keys mirror this layout:
 
@@ -75,9 +75,9 @@ Default storage prefix is `repositories` (S3) or the local root directory contai
 
 Use **HTTP Basic** authentication:
 
-| Field | Value |
-|-------|-------|
-| Username | Token name (as configured) |
+| Field    | Value                                        |
+|----------|----------------------------------------------|
+| Username | Token name (as configured)                   |
 | Password | Raw token secret (shown once when generated) |
 
 Gradle example:
@@ -106,10 +106,10 @@ Maven `settings.xml` server entry:
 
 PackVault uses the standard library `logging` module with a single root configuration.
 
-| Setting | Env variable | CLI flag | Default |
-|---------|--------------|----------|---------|
-| Level | `PACKVAULT_LOG_LEVEL` | `--log-level` | `INFO` |
-| Format | `PACKVAULT_LOG_FORMAT` | `--log-format` | `json` |
+| Setting | Env variable           | CLI flag       | Default |
+|---------|------------------------|----------------|---------|
+| Level   | `PACKVAULT_LOG_LEVEL`  | `--log-level`  | `INFO`  |
+| Format  | `PACKVAULT_LOG_FORMAT` | `--log-format` | `json`  |
 
 Precedence: **CLI > environment variable > YAML config > default**.
 
@@ -324,10 +324,10 @@ https://packvault.example/releases/com/acme/foo/1.0.0/foo-1.0.0.jar
 https://packvault.example/snapshots/com/acme/foo/1.0.0-SNAPSHOT/foo-1.0.0-SNAPSHOT.jar
 ```
 
-| Part | Meaning |
-|---|---|
+| Part               | Meaning                                                  |
+|--------------------|----------------------------------------------------------|
 | `<repositoryName>` | Configured repository, such as `releases` or `snapshots` |
-| `<mavenPath>` | Standard Maven artifact path |
+| `<mavenPath>`      | Standard Maven artifact path                             |
 
 S3 object keys use the configured S3 prefix:
 
@@ -362,10 +362,10 @@ repositories:
 
 Recommended defaults:
 
-| Repository | `allowOverwrite` | Meaning |
-|---|---:|---|
-| `releases` | `false` | immutable release artifacts |
-| `snapshots` | `true` | mutable snapshot artifacts |
+| Repository  | `allowOverwrite` | Meaning                     |
+|-------------|-----------------:|-----------------------------|
+| `releases`  |          `false` | immutable release artifacts |
+| `snapshots` |           `true` | mutable snapshot artifacts  |
 
 If overwrite is disabled and an object already exists, PackVault returns:
 
@@ -377,10 +377,10 @@ If overwrite is disabled and an object already exists, PackVault returns:
 
 Maven and Gradle clients use HTTP Basic authentication.
 
-| Basic auth field | Value |
-|---|---|
-| Username | token name |
-| Password | raw token secret |
+| Basic auth field | Value            |
+|------------------|------------------|
+| Username         | token name       |
+| Password         | raw token secret |
 
 The config stores only the token hash:
 
@@ -427,10 +427,10 @@ python scripts/hash_password.py
 
 PackVault supports JSON and standard text logs.
 
-| Setting | Env variable | CLI flag | Default |
-|---|---|---|---|
-| Level | `PACKVAULT_LOG_LEVEL` | `--log-level` | `INFO` |
-| Format | `PACKVAULT_LOG_FORMAT` | `--log-format` | `json` |
+| Setting | Env variable           | CLI flag       | Default |
+|---------|------------------------|----------------|---------|
+| Level   | `PACKVAULT_LOG_LEVEL`  | `--log-level`  | `INFO`  |
+| Format  | `PACKVAULT_LOG_FORMAT` | `--log-format` | `json`  |
 
 Precedence:
 
@@ -458,9 +458,9 @@ ERROR
 
 Supported formats:
 
-| Format | Use |
-|---|---|
-| `json` | structured logs for containers and log aggregation |
-| `standard` | human-readable local development logs |
+| Format     | Use                                                |
+|------------|----------------------------------------------------|
+| `json`     | structured logs for containers and log aggregation |
+| `standard` | human-readable local development logs              |
 
 Audit logs are emitted on write attempts through the `packvault.audit` logger. They include repository, path, principal, status code, client IP, user agent, request ID, and uploaded bytes. Secrets are not logged.

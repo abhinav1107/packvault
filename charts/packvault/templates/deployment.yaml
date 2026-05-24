@@ -1,4 +1,3 @@
-
 {{- if and (eq .Values.config.storage.backend "local") (gt (int .Values.replicaCount) 1) }}
 {{- fail "config.storage.backend=local requires replicaCount=1. Use config.storage.backend=s3 for multiple replicas." }}
 {{- end }}
