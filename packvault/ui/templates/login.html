@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PackVault — Login</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main class="container">
+    <h1>PackVault</h1>
+    <p class="tagline">Secure Maven package hosting</p>
+
+    {% if "local" in providers %}
+    <section class="card">
+      <h2>Local sign-in</h2>
+      <form method="post" action="/login">
+        <label>Username <input name="username" type="text" required autocomplete="username"></label>
+        <label>Password <input name="password" type="password" required autocomplete="current-password"></label>
+        <button type="submit">Sign in</button>
+      </form>
+    </section>
+    {% endif %}
+
+    {% if "google" in providers %}
+    <section class="card">
+      <h2>Google SSO</h2>
+      <a class="button secondary" href="/auth/google/login">Sign in with Google</a>
+    </section>
+    {% endif %}
+  </main>
+</body>
+</html>

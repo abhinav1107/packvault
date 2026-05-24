@@ -1,0 +1,289 @@
+# Default values for packvault.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# This sets the replica count for PackVault.
+# Local storage mode must run with replicaCount: 1 because the local filesystem is the source of truth.
+# S3/object-storage mode can run with multiple replicas because object storage is the source of truth.
+replicaCount: 1
+
+# Deployment strategy.
+# If type is empty, templates default to:
+# - Recreate for storage.backend=local, so a replacement pod does not compete for the same RWO PVC.
+# - RollingUpdate for storage.backend=s3, because object storage is the source of truth.
+# rollingUpdate settings are used only when the effective strategy type is RollingUpdate.
+deploymentStrategy:
+  type: ""
+  rollingUpdate:
+    maxSurge: 25%
+    maxUnavailable: 0
+
+# This sets the PackVault container image.
+image:
+  repository: ghcr.io/abhinav1107/packvault
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: ""
+
+# This is for the secrets for pulling an image from a private repository.
+imagePullSecrets: []
+
+# This is to override the chart name.
+nameOverride: ""
+fullnameOverride: ""
+
+# PackVault application configuration.
+# This block is rendered into the PackVault config file mounted at /config/config.yaml.
+config:
+  storage:
+    # Supported values: local, s3
+    backend: local
+
+    # Local storage backend.
+    # Suitable for single-server or development installs.
+    local:
+      root: /data
+
+    # S3-compatible object storage backend.
+    # Used when storage.backend is s3.
+    s3:
+      endpointUrl: ""
+      bucket: ""
+      region: us-east-1
+      pathStyle: false
+      prefix: repositories
+
+    # Local artifact cache for S3 backend.
+    # In S3 mode, this path is disposable because object storage remains the source of truth.
+    # It intentionally uses the same data path used by local mode.
+    cache:
+      path: /data
+      metadataTtlSeconds: 60
+      snapshotTtlSeconds: 300
+
+  auth:
+    # Supported values: local, google, oidc
+    providers:
+      - local
+
+    local:
+      username: admin
+      # Required when local auth provider is enabled.
+      # Store an Argon2 hash here, not a raw password.
+      # The real value should be supplied through the container environment.
+      passwordHash: ${env.PACKVAULT_LOCAL_ADMIN_PASSWORD_HASH}
+
+    google:
+      clientId: ${env.PACKVAULT_GOOGLE_CLIENT_ID}
+      clientSecret: ${env.PACKVAULT_GOOGLE_CLIENT_SECRET}
+      redirectUri: ""
+
+    oidc:
+      issuer: ""
+      clientId: ${env.PACKVAULT_OIDC_CLIENT_ID}
+      clientSecret: ${env.PACKVAULT_OIDC_CLIENT_SECRET}
+      redirectUri: ""
+      scopes:
+        - openid
+        - profile
+        - email
+
+    # Maven/Gradle API tokens.
+    # tokenHash must contain the hash of the raw token, not the raw token itself.
+    tokens: []
+    # Example:
+    # tokens:
+    #   - name: ci-publisher
+    #     tokenHash: ${env.PACKVAULT_CI_TOKEN_HASH}
+    #     expiresAt: null
+    #     permissions:
+    #       - repository: releases
+    #         actions:
+    #           - read
+    #           - write
+
+  repositories:
+    - name: releases
+      allowOverwrite: false
+    - name: snapshots
+      allowOverwrite: true
+
+  security:
+    anonymousRead: false
+
+  server:
+    publicUrl: "https://packvault.example"
+    # Required. Use a strong random value.
+    # The real value should be supplied through the container environment.
+    sessionSecret: ${env.PACKVAULT_SESSION_SECRET}
+    maxUploadBytes: 524288000
+    requestTimeoutSeconds: 300
+
+  logging:
+    level: INFO
+    format: json
+
+# Additional environment variables to add to the PackVault container.
+# Useful for cloud credentials, Pod Identity integrations, or external secret injection.
+extraEnv: []
+# Example:
+# extraEnv:
+#   - name: PACKVAULT_SESSION_SECRET
+#     valueFrom:
+#       secretKeyRef:
+#         name: packvault-secrets
+#         key: session-secret
+#   - name: PACKVAULT_LOCAL_ADMIN_PASSWORD_HASH
+#     valueFrom:
+#       secretKeyRef:
+#         name: packvault-secrets
+#         key: local-admin-password-hash
+#   - name: PACKVAULT_CI_TOKEN_HASH
+#     valueFrom:
+#       secretKeyRef:
+#         name: packvault-secrets
+#         key: ci-token-hash
+#   - name: AWS_REGION
+#     value: us-east-1
+#   - name: AWS_ACCESS_KEY_ID
+#     valueFrom:
+#       secretKeyRef:
+#         name: packvault-s3
+#         key: access-key-id
+#   - name: AWS_SECRET_ACCESS_KEY
+#     valueFrom:
+#       secretKeyRef:
+#         name: packvault-s3
+#         key: secret-access-key
+
+# This section builds out the service account.
+serviceAccount:
+  # Specifies whether a service account should be created.
+  create: true
+  # Automatically mount a ServiceAccount's API credentials?
+  automount: true
+  # Annotations to add to the service account.
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template.
+  name: ""
+
+# This is for setting Kubernetes annotations to a Pod.
+podAnnotations: {}
+
+# This is for setting Kubernetes labels to a Pod.
+podLabels: {}
+
+podSecurityContext:
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+
+# This is for setting up a service.
+service:
+  type: ClusterIP
+  port: 8080
+  annotations: {}
+
+# This block is for setting up ingress.
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: packvault.example
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# Autoscaling is mainly useful with storage.backend=s3.
+# Do not autoscale local backend because local storage mode must remain single-replica.
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+resources: {}
+# We usually recommend not to specify default resources and to leave this as a conscious
+# choice for the user. If you do want to specify resources, uncomment the following
+# lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+# limits:
+#   cpu: 500m
+#   memory: 512Mi
+# requests:
+#   cpu: 100m
+#   memory: 256Mi
+
+# This is to set up startup, liveness, and readiness probes.
+probes:
+  startup:
+    enabled: true
+    path: /startupz
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 30
+  liveness:
+    enabled: true
+    path: /livez
+    initialDelaySeconds: 0
+    periodSeconds: 30
+    timeoutSeconds: 3
+    failureThreshold: 3
+  readiness:
+    enabled: true
+    path: /readyz
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+# Persistent PackVault workspace storage.
+# This volume is mounted at workspace.mountPath.
+# - local backend: stores the source-of-truth artifact files
+# - s3 backend: stores the local artifact cache; S3 remains the source of truth
+persistence:
+  enabled: true
+  size: 10Gi
+  storageClassName: ""
+  accessModes:
+    - ReadWriteOnce
+
+# PackVault data/workspace mount.
+# The chart should mount the persistent workspace volume at this path.
+workspace:
+  mountPath: /data
+
+# Additional volumes on the output Deployment definition.
+# The chart should already create the PackVault config volume and the required workspace volume.
+# Use this only for extra user-supplied mounts.
+volumes: []
+# - name: foo
+#   secret:
+#     secretName: mysecret
+#     optional: false
+
+# Additional volumeMounts on the output Deployment definition.
+# The chart should already mount /config/config.yaml and the PackVault data/workspace mount.
+# Use this only for extra user-supplied mounts.
+volumeMounts: []
+# - name: foo
+#   mountPath: "/etc/foo"
+#   readOnly: true
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

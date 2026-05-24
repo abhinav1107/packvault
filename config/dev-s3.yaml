@@ -1,0 +1,62 @@
+storage:
+  backend: s3
+  s3:
+    endpointUrl: ${env.PACKVAULT_S3_ENDPOINT_URL}
+    bucket: ${env.PACKVAULT_S3_BUCKET}
+    region: ${env.PACKVAULT_S3_REGION}
+    pathStyle: ${env.PACKVAULT_S3_PATH_STYLE}
+    prefix: ${env.PACKVAULT_S3_PREFIX}
+  cache:
+    path: ${env.PACKVAULT_CACHE_PATH}
+    metadataTtlSeconds: ${env.PACKVAULT_CACHE_METADATA_TTL_SECONDS}
+    snapshotTtlSeconds: ${env.PACKVAULT_CACHE_SNAPSHOT_TTL_SECONDS}
+
+auth:
+  providers:
+    - local
+  local:
+    username: ${env.PACKVAULT_LOCAL_ADMIN_USERNAME}
+    passwordHash: ${env.PACKVAULT_LOCAL_ADMIN_PASSWORD_HASH}
+  tokens:
+    - name: ${env.PACKVAULT_CI_TOKEN_NAME}
+      tokenHash: ${env.PACKVAULT_CI_TOKEN_HASH}
+      expiresAt: null
+      permissions:
+        - repository: releases
+          actions:
+            - read
+            - write
+        - repository: snapshots
+          actions:
+            - read
+            - write
+
+    - name: ${env.PACKVAULT_READER_TOKEN_NAME}
+      tokenHash: ${env.PACKVAULT_READER_TOKEN_HASH}
+      expiresAt: null
+      permissions:
+        - repository: releases
+          actions:
+            - read
+
+repositories:
+  - name: releases
+    allowOverwrite: false
+
+  - name: snapshots
+    allowOverwrite: true
+
+security:
+  anonymousRead: ${env.PACKVAULT_ANONYMOUS_READ}
+
+server:
+  host: 0.0.0.0
+  port: 8080
+  publicUrl: ${env.PACKVAULT_PUBLIC_URL}
+  sessionSecret: ${env.PACKVAULT_SESSION_SECRET}
+  maxUploadBytes: ${env.PACKVAULT_MAX_UPLOAD_BYTES}
+  requestTimeoutSeconds: ${env.PACKVAULT_REQUEST_TIMEOUT_SECONDS}
+
+logging:
+  level: ${env.PACKVAULT_LOG_LEVEL}
+  format: ${env.PACKVAULT_LOG_FORMAT}

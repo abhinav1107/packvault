@@ -1,0 +1,54 @@
+storage:
+  backend: local
+  local:
+    root: ${env.PACKVAULT_LOCAL_ROOT}
+
+auth:
+  providers:
+    - local
+  local:
+    username: ${env.PACKVAULT_LOCAL_ADMIN_USERNAME}
+    passwordHash: ${env.PACKVAULT_LOCAL_ADMIN_PASSWORD_HASH}
+  tokens:
+    - name: ${env.PACKVAULT_CI_TOKEN_NAME}
+      tokenHash: ${env.PACKVAULT_CI_TOKEN_HASH}
+      expiresAt: null
+      permissions:
+        - repository: releases
+          actions:
+            - read
+            - write
+        - repository: snapshots
+          actions:
+            - read
+            - write
+
+    - name: ${env.PACKVAULT_READER_TOKEN_NAME}
+      tokenHash: ${env.PACKVAULT_READER_TOKEN_HASH}
+      expiresAt: null
+      permissions:
+        - repository: releases
+          actions:
+            - read
+
+repositories:
+  - name: releases
+    allowOverwrite: false
+
+  - name: snapshots
+    allowOverwrite: true
+
+security:
+  anonymousRead: ${env.PACKVAULT_ANONYMOUS_READ}
+
+server:
+  host: 0.0.0.0
+  port: 8080
+  publicUrl: ${env.PACKVAULT_PUBLIC_URL}
+  sessionSecret: ${env.PACKVAULT_SESSION_SECRET}
+  maxUploadBytes: ${env.PACKVAULT_MAX_UPLOAD_BYTES}
+  requestTimeoutSeconds: ${env.PACKVAULT_REQUEST_TIMEOUT_SECONDS}
+
+logging:
+  level: ${env.PACKVAULT_LOG_LEVEL}
+  format: ${env.PACKVAULT_LOG_FORMAT}

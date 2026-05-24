@@ -1,0 +1,87 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "packvault.fullname" . }}
+  labels:
+    {{- include "packvault.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    storage:
+      backend: {{ .Values.config.storage.backend | quote }}
+      {{- if eq .Values.config.storage.backend "local" }}
+      local:
+        root: {{ .Values.config.storage.local.root | quote }}
+      {{- else if eq .Values.config.storage.backend "s3" }}
+      s3:
+        {{- with .Values.config.storage.s3.endpointUrl }}
+        endpointUrl: {{ . | quote }}
+        {{- end }}
+        bucket: {{ .Values.config.storage.s3.bucket | quote }}
+        region: {{ .Values.config.storage.s3.region | quote }}
+        pathStyle: {{ .Values.config.storage.s3.pathStyle }}
+        prefix: {{ .Values.config.storage.s3.prefix | quote }}
+      cache:
+        path: {{ .Values.config.storage.cache.path | quote }}
+        metadataTtlSeconds: {{ .Values.config.storage.cache.metadataTtlSeconds }}
+        snapshotTtlSeconds: {{ .Values.config.storage.cache.snapshotTtlSeconds }}
+      {{- else }}
+      {{- fail "config.storage.backend must be either local or s3" }}
+      {{- end }}
+
+    auth:
+      {{- if not .Values.config.auth.providers }}
+      {{- fail "config.auth.providers must contain at least one auth provider" }}
+      {{- end }}
+      providers:
+        {{- toYaml .Values.config.auth.providers | nindent 8 }}
+      {{- if has "local" .Values.config.auth.providers }}
+      local:
+        username: {{ .Values.config.auth.local.username | quote }}
+        passwordHash: {{ .Values.config.auth.local.passwordHash | quote }}
+      {{- end }}
+      {{- if has "google" .Values.config.auth.providers }}
+      google:
+        clientId: {{ .Values.config.auth.google.clientId | quote }}
+        clientSecret: {{ .Values.config.auth.google.clientSecret | quote }}
+        {{- with .Values.config.auth.google.redirectUri }}
+        redirectUri: {{ . | quote }}
+        {{- end }}
+      {{- end }}
+      {{- if has "oidc" .Values.config.auth.providers }}
+      oidc:
+        issuer: {{ .Values.config.auth.oidc.issuer | quote }}
+        clientId: {{ .Values.config.auth.oidc.clientId | quote }}
+        clientSecret: {{ .Values.config.auth.oidc.clientSecret | quote }}
+        {{- with .Values.config.auth.oidc.redirectUri }}
+        redirectUri: {{ . | quote }}
+        {{- end }}
+        scopes:
+          {{- toYaml .Values.config.auth.oidc.scopes | nindent 10 }}
+      {{- end }}
+      {{- if .Values.config.auth.tokens }}
+      tokens:
+        {{- toYaml .Values.config.auth.tokens | nindent 8 }}
+      {{- else }}
+      tokens: []
+      {{- end }}
+
+    {{- if not .Values.config.repositories }}
+    {{- fail "config.repositories must contain at least one repository" }}
+    {{- end }}
+    repositories:
+      {{- toYaml .Values.config.repositories | nindent 6 }}
+
+    security:
+      anonymousRead: {{ .Values.config.security.anonymousRead }}
+
+    server:
+      host: "0.0.0.0"
+      port: {{ .Values.service.port }}
+      publicUrl: {{ .Values.config.server.publicUrl | quote }}
+      sessionSecret: {{ .Values.config.server.sessionSecret | quote }}
+      maxUploadBytes: {{ .Values.config.server.maxUploadBytes | int }}
+      requestTimeoutSeconds: {{ .Values.config.server.requestTimeoutSeconds }}
+
+    logging:
+      level: {{ .Values.config.logging.level | quote }}
+      format: {{ .Values.config.logging.format | quote }}
