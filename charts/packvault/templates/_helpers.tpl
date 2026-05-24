@@ -82,7 +82,7 @@ strategy:
   type: {{ $strategyType }}
 {{- if eq $strategyType "RollingUpdate" }}
   rollingUpdate:
-    maxSurge: {{ .Values.deploymentStrategy.rollingUpdate.maxSurge | quote }}
-    maxUnavailable: {{ .Values.deploymentStrategy.rollingUpdate.maxUnavailable | quote }}
+    maxSurge: {{ .Values.deploymentStrategy.rollingUpdate.maxSurge }}
+    maxUnavailable: {{ .Values.deploymentStrategy.rollingUpdate.maxUnavailable }}
 {{- end }}
 {{- end }}
