@@ -73,4 +73,21 @@ Storage backend:
 Workspace mount:
   {{ .Values.workspace.mountPath }}
 
+Workspace volume:
+{{- if eq .Values.config.storage.backend "local" }}
+  PersistentVolumeClaim mounted at {{ .Values.workspace.mountPath }}.
+  Local backend is single-replica only and uses the PVC as the source-of-truth artifact store.
+{{- else if eq .Values.config.storage.backend "s3" }}
+  emptyDir mounted at {{ .Values.workspace.mountPath }}.
+  S3/object storage is the source of truth; the local workspace is a disposable per-pod cache.
+{{- end }}
+
+Autoscaling:
+{{- if .Values.autoscaling.enabled }}
+  Enabled. This is valid only with storage.backend=s3.
+{{- else }}
+  Disabled.
+{{- end }}
+
 See docs/configuration.md, docs/operations.md, and docs/publishing-gradle.md for more details.
+

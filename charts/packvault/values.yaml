@@ -5,12 +5,13 @@
 # This sets the replica count for PackVault.
 # Local storage mode must run with replicaCount: 1 because the local filesystem is the source of truth.
 # S3/object-storage mode can run with multiple replicas because object storage is the source of truth.
+# In S3 mode, each pod gets its own disposable emptyDir cache mounted at workspace.mountPath.
 replicaCount: 1
 
 # Deployment strategy.
 # If type is empty, templates default to:
-# - Recreate for storage.backend=local, so a replacement pod does not compete for the same RWO PVC.
-# - RollingUpdate for storage.backend=s3, because object storage is the source of truth.
+# - Recreate for storage.backend=local, because local mode uses a single RWO PVC.
+# - RollingUpdate for storage.backend=s3, because object storage is the source of truth and cache is disposable.
 # rollingUpdate settings are used only when the effective strategy type is RollingUpdate.
 deploymentStrategy:
   type: ""
@@ -205,14 +206,15 @@ ingress:
           pathType: Prefix
   tls: []
 
-# Autoscaling is mainly useful with storage.backend=s3.
+# Autoscaling is only valid with storage.backend=s3.
 # Do not autoscale local backend because local storage mode must remain single-replica.
+# In S3 mode, autoscaled pods use independent emptyDir caches.
 autoscaling:
   enabled: false
   minReplicas: 1
   maxReplicas: 3
   targetCPUUtilizationPercentage: 80
-  targetMemoryUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
 
 resources: {}
 # We usually recommend not to specify default resources and to leave this as a conscious
@@ -249,24 +251,22 @@ probes:
     timeoutSeconds: 3
     failureThreshold: 3
 
-# Persistent PackVault workspace storage.
-# This volume is mounted at workspace.mountPath.
-# - local backend: stores the source-of-truth artifact files
-# - s3 backend: stores the local artifact cache; S3 remains the source of truth
+# Persistent PackVault workspace storage for storage.backend=local.
+# Local backend always uses a ReadWriteOnce PVC mounted at workspace.mountPath.
+# S3 backend does not use this PVC; it uses a per-pod emptyDir cache at the same mount path.
 persistence:
-  enabled: true
   size: 10Gi
   storageClassName: ""
-  accessModes:
-    - ReadWriteOnce
 
 # PackVault data/workspace mount.
-# The chart should mount the persistent workspace volume at this path.
+# - local backend: PVC mounted here; this is the source-of-truth artifact store.
+# - s3 backend: emptyDir mounted here; this is a disposable local artifact cache.
 workspace:
   mountPath: /data
 
 # Additional volumes on the output Deployment definition.
 # The chart should already create the PackVault config volume and the required workspace volume.
+# Do not use this to replace the built-in /data workspace volume.
 # Use this only for extra user-supplied mounts.
 volumes: []
 # - name: foo
@@ -276,6 +276,7 @@ volumes: []
 
 # Additional volumeMounts on the output Deployment definition.
 # The chart should already mount /config/config.yaml and the PackVault data/workspace mount.
+# Do not use this to replace the built-in /data workspace mount.
 # Use this only for extra user-supplied mounts.
 volumeMounts: []
 # - name: foo
@@ -287,3 +288,4 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
