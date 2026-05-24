@@ -1,0 +1,112 @@
+services:
+  packvault:
+    image: local/packvault:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: packvault
+    ports:
+      - "${PACKVAULT_HOST_PORT:-8080}:8080"
+    environment:
+      PACKVAULT_CONFIG: ${PACKVAULT_CONFIG_CONTAINER:-/config/config.yaml}
+
+      # Local storage mode
+      PACKVAULT_LOCAL_ROOT: ${PACKVAULT_LOCAL_ROOT:-/data/maven}
+
+      # Auth / tokens
+      PACKVAULT_LOCAL_ADMIN_USERNAME: ${PACKVAULT_LOCAL_ADMIN_USERNAME:-admin}
+      PACKVAULT_LOCAL_ADMIN_PASSWORD_HASH: ${PACKVAULT_LOCAL_ADMIN_PASSWORD_HASH:-}
+      PACKVAULT_CI_TOKEN_NAME: ${PACKVAULT_CI_TOKEN_NAME:-ci-publisher}
+      PACKVAULT_CI_TOKEN_HASH: ${PACKVAULT_CI_TOKEN_HASH:-}
+      PACKVAULT_READER_TOKEN_NAME: ${PACKVAULT_READER_TOKEN_NAME:-app-reader}
+      PACKVAULT_READER_TOKEN_HASH: ${PACKVAULT_READER_TOKEN_HASH:-}
+
+      # Security / server
+      PACKVAULT_ANONYMOUS_READ: ${PACKVAULT_ANONYMOUS_READ:-false}
+      PACKVAULT_PUBLIC_URL: ${PACKVAULT_PUBLIC_URL:-http://localhost:8080}
+      PACKVAULT_SESSION_SECRET: ${PACKVAULT_SESSION_SECRET:-}
+      PACKVAULT_MAX_UPLOAD_BYTES: ${PACKVAULT_MAX_UPLOAD_BYTES:-524288000}
+      PACKVAULT_REQUEST_TIMEOUT_SECONDS: ${PACKVAULT_REQUEST_TIMEOUT_SECONDS:-300}
+
+      # Logging
+      PACKVAULT_LOG_LEVEL: ${PACKVAULT_LOG_LEVEL:-INFO}
+      PACKVAULT_LOG_FORMAT: ${PACKVAULT_LOG_FORMAT:-json}
+
+      # S3 / MinIO mode
+      PACKVAULT_S3_ENDPOINT_URL: ${PACKVAULT_S3_ENDPOINT_URL:-http://minio:9000}
+      PACKVAULT_S3_BUCKET: ${PACKVAULT_S3_BUCKET:-packvault}
+      PACKVAULT_S3_REGION: ${PACKVAULT_S3_REGION:-us-east-1}
+      PACKVAULT_S3_PATH_STYLE: ${PACKVAULT_S3_PATH_STYLE:-true}
+      PACKVAULT_S3_PREFIX: ${PACKVAULT_S3_PREFIX:-repositories}
+      PACKVAULT_CACHE_PATH: ${PACKVAULT_CACHE_PATH:-/cache/maven}
+      PACKVAULT_CACHE_METADATA_TTL_SECONDS: ${PACKVAULT_CACHE_METADATA_TTL_SECONDS:-60}
+      PACKVAULT_CACHE_SNAPSHOT_TTL_SECONDS: ${PACKVAULT_CACHE_SNAPSHOT_TTL_SECONDS:-300}
+
+      # AWS SDK variables used by aioboto3.
+      # For MinIO profile, these default to the MinIO root credentials.
+      AWS_ACCESS_KEY_ID: ${PACKVAULT_S3_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${PACKVAULT_S3_SECRET_ACCESS_KEY:-}
+      AWS_DEFAULT_REGION: ${PACKVAULT_S3_REGION:-us-east-1}
+
+      # Optional Google SSO
+      PACKVAULT_GOOGLE_CLIENT_ID: ${PACKVAULT_GOOGLE_CLIENT_ID:-}
+      PACKVAULT_GOOGLE_CLIENT_SECRET: ${PACKVAULT_GOOGLE_CLIENT_SECRET:-}
+
+      # Optional generic OIDC
+      PACKVAULT_OIDC_CLIENT_ID: ${PACKVAULT_OIDC_CLIENT_ID:-}
+      PACKVAULT_OIDC_CLIENT_SECRET: ${PACKVAULT_OIDC_CLIENT_SECRET:-}
+    volumes:
+      - ${PACKVAULT_CONFIG_FILE:-./config/dev.yaml}:${PACKVAULT_CONFIG_CONTAINER:-/config/config.yaml}:ro
+      - packvault-data:/data/maven
+      - packvault-cache:/cache/maven
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+        required: false
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    container_name: packvault-minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: packvault-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      PACKVAULT_S3_BUCKET: ${PACKVAULT_S3_BUCKET:-packvault}
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD &&
+      mc mb --ignore-existing local/$$PACKVAULT_S3_BUCKET
+      "
+    restart: "no"
+
+volumes:
+  packvault-data:
+    name: packvault-data
+
+  packvault-cache:
+    name: packvault-cache
+
+  minio-data:
+    name: packvault-minio-data

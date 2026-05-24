@@ -1,0 +1,76 @@
+PackVault has been deployed.
+
+Release:
+  Name:      {{ .Release.Name }}
+  Namespace: {{ .Release.Namespace }}
+
+Service:
+  Name: {{ include "packvault.fullname" . }}
+  Port: {{ .Values.service.port }}
+
+{{- if .Values.ingress.enabled }}
+Ingress is enabled.
+
+Configured host(s):
+{{- range .Values.ingress.hosts }}
+  - {{ .host }}
+{{- end }}
+
+Application URL:
+{{- range .Values.ingress.hosts }}
+  {{- $scheme := "http" }}
+  {{- if $.Values.ingress.tls }}
+  {{- $scheme = "https" }}
+  {{- end }}
+  - {{ $scheme }}://{{ .host }}
+{{- end }}
+{{- else }}
+Ingress is disabled.
+
+Access PackVault locally with:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "packvault.fullname" . }} 8080:{{ .Values.service.port }}
+
+Then open:
+  http://localhost:8080
+{{- end }}
+
+Maven/Gradle repository URL pattern:
+  <base-url>/<repositoryName>
+
+Examples:
+{{- if .Values.ingress.enabled }}
+{{- range .Values.ingress.hosts }}
+  {{- $scheme := "http" }}
+  {{- if $.Values.ingress.tls }}
+  {{- $scheme = "https" }}
+  {{- end }}
+  Releases:  {{ $scheme }}://{{ .host }}/releases
+  Snapshots: {{ $scheme }}://{{ .host }}/snapshots
+{{- end }}
+{{- else }}
+  Releases:  http://localhost:8080/releases
+  Snapshots: http://localhost:8080/snapshots
+{{- end }}
+
+Health checks:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "packvault.fullname" . }} 8080:{{ .Values.service.port }}
+  curl -i http://localhost:8080/livez
+  curl -i http://localhost:8080/startupz
+  curl -i http://localhost:8080/readyz
+
+Important:
+  Secret-like values in the generated ConfigMap are expected to use ${env.NAME} placeholders.
+  Make sure the corresponding environment variables are provided through extraEnv, Kubernetes Secrets, Pod Identity, or another runtime mechanism.
+
+Common required values:
+  PACKVAULT_SESSION_SECRET
+  PACKVAULT_LOCAL_ADMIN_PASSWORD_HASH
+  PACKVAULT_CI_TOKEN_HASH / other token hashes configured under config.auth.tokens
+
+Storage backend:
+  {{ .Values.config.storage.backend }}
+
+Workspace mount:
+  {{ .Values.workspace.mountPath }}
+
+See docs/configuration.md, docs/operations.md, and docs/publishing-gradle.md for more details.
