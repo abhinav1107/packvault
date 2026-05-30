@@ -26,6 +26,7 @@ from packvault.api.routes_maven import router as maven_router
 from packvault.api.routes_operations import router as operations_router
 from packvault.api.routes_ping import router as ping_router
 from packvault.api.routes_setup import router as setup_router
+from packvault.api.routes_artifacts import router as artifacts_router
 from packvault.api.routes_ui import router as ui_router
 from packvault.auth.google import create_google_oauth
 from packvault.auth.sessions import SessionManager
@@ -167,6 +168,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(ping_router)
     app.include_router(operations_router)
     app.include_router(ui_router)
+    app.include_router(artifacts_router)
     app.include_router(setup_router)
     app.include_router(auth_router)
     app.include_router(maven_router)

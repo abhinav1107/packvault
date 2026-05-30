@@ -16,6 +16,10 @@ body {
   padding: 0 1rem;
 }
 
+.container.wide {
+  max-width: 960px;
+}
+
 h1 {
   margin-bottom: 0.25rem;
 }
@@ -81,6 +85,77 @@ pre {
 
 .header a {
   color: #9aa7b5;
+}
+
+.nav-links {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.nav-links a.active {
+  color: #e7ecf3;
+  font-weight: 600;
+}
+
+.artifacts-filters label {
+  margin-bottom: 1rem;
+}
+
+.artifacts-filters label.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.artifacts-filters label.checkbox input {
+  width: auto;
+  margin: 0;
+}
+
+.artifacts-filters select {
+  display: block;
+  width: 100%;
+  margin-top: 0.25rem;
+  padding: 0.5rem;
+  border-radius: 4px;
+  border: 1px solid #2a3544;
+  background: #0f1419;
+  color: inherit;
+}
+
+.artifacts-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.artifacts-table th,
+.artifacts-table td {
+  text-align: left;
+  padding: 0.5rem 0.25rem;
+  border-bottom: 1px solid #2a3544;
+  vertical-align: top;
+}
+
+.artifacts-table .actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.delete-form {
+  margin: 0;
+}
+
+button.danger,
+.button.danger {
+  background: #a33d4a;
+}
+
+.pagination {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
 }
 
 .banner {

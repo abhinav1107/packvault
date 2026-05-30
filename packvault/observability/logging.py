@@ -227,8 +227,8 @@ def _sanitize_log_fields(fields: dict[str, Any]) -> dict[str, Any]:
     return sanitized
 
 
-def audit_log(**fields: Any) -> None:
-    """Structured audit entry for write operations (design doc section 15)."""
+def audit_log(*, event: str = "artifact_write", **fields: Any) -> None:
+    """Structured audit entry for repository operations (writes, deletes, etc.)."""
     logger = logging.getLogger("packvault.audit")
     safe_fields = _sanitize_log_fields(fields)
-    logger.info("artifact_write", extra={"extra_fields": safe_fields})
+    logger.info(event, extra={"extra_fields": safe_fields})

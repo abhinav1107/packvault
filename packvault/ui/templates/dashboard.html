@@ -11,7 +11,9 @@
   <main class="container">
     <header class="header">
       <h1>Dashboard</h1>
-      <a href="/logout">Logout</a>
+      {% with active='dashboard' %}
+      {% include "_nav.html" %}
+      {% endwith %}
     </header>
 
     {% if setup_complete %}
