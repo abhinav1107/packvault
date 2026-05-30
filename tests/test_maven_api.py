@@ -67,11 +67,16 @@ async def test_not_found(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_health_endpoints(client: AsyncClient) -> None:
-    assert (await client.get("/livez")).status_code == 200
-    assert (await client.get("/startupz")).status_code == 200
-    assert (await client.get("/readyz")).status_code == 200
-    assert (await client.get("/metrics")).status_code == 200
+async def test_ping_endpoint(client: AsyncClient) -> None:
+    response = await client.get("/ping")
+    assert response.status_code == 200
+    assert response.text == "pong"
+
+
+@pytest.mark.asyncio
+async def test_health_endpoints_not_on_main_port(client: AsyncClient) -> None:
+    assert (await client.get("/livez", follow_redirects=True)).status_code == 404
+    assert (await client.get("/metrics", follow_redirects=True)).status_code == 404
 
 
 @pytest.mark.asyncio

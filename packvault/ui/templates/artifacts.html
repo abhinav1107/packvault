@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PackVault — Artifacts</title>
+  {% include "_head_icons.html" %}
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main class="container wide">
+    <header class="header">
+      <h1>Artifacts</h1>
+      {% with active='artifacts' %}
+      {% include "_nav.html" %}
+      {% endwith %}
+    </header>
+
+    {% if deleted %}
+    <div class="banner success" role="status">
+      <p>Artifact deleted successfully.</p>
+    </div>
+    {% endif %}
+
+    <section class="card">
+      <form method="get" action="/artifacts" class="artifacts-filters">
+        <label>
+          Repository
+          <select name="repository">
+            {% for repo in repositories %}
+            <option value="{{ repo }}"{% if repo == repository %} selected{% endif %}>{{ repo }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>
+          Path prefix
+          <input type="text" name="prefix" value="{{ prefix }}" placeholder="com/example/myapp">
+        </label>
+        <label class="checkbox">
+          <input type="checkbox" name="show_all" value="1"{% if show_all %} checked{% endif %}>
+          Show checksum sidecars and maven-metadata.xml
+        </label>
+        <button type="submit">Search</button>
+      </form>
+      <p class="hint">Lists objects under the selected repository. Hidden by default: <code>.sha1</code>, <code>.md5</code>, <code>.asc</code>, and <code>maven-metadata.xml</code>.</p>
+    </section>
+
+    <section class="card">
+      {% if items %}
+      <table class="artifacts-table">
+        <thead>
+          <tr>
+            <th>Path</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+          <tr>
+            <td><code>{{ item.path }}</code></td>
+            <td class="actions">
+              <form method="post" action="/artifacts/delete" class="delete-form"
+                    onsubmit="return confirm('Delete {{ item.path }}? This cannot be undone.');">
+                <input type="hidden" name="repository" value="{{ item.repository }}">
+                <input type="hidden" name="path" value="{{ item.path }}">
+                <input type="hidden" name="prefix" value="{{ prefix }}">
+                {% if show_all %}
+                <input type="hidden" name="show_all" value="1">
+                {% endif %}
+                <button type="submit" class="button danger">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p>No artifacts found for this filter.</p>
+      {% endif %}
+
+      <div class="pagination">
+        {% if prev_cursor %}
+        <a class="button secondary" href="{{ artifacts_query(repository=repository, prefix=prefix, show_all=show_all) }}">First page</a>
+        {% endif %}
+        {% if has_more and next_cursor %}
+        <a class="button secondary" href="{{ artifacts_query(repository=repository, prefix=prefix, show_all=show_all, cursor=next_cursor) }}">Next page</a>
+        {% endif %}
+      </div>
+    </section>
+  </main>
+</body>
+</html>

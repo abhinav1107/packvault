@@ -1,25 +1,38 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
 from packvault.api.deps import get_optional_session, get_state
+from packvault.api.error_handling import UI_FORM_ERROR_MESSAGES
+from packvault.auth.bootstrap import post_login_redirect_path
 from packvault.auth.permissions import SessionUser
 from packvault.runtime import AppState
+from packvault.ui.branding import STATIC_FAVICON_PATH
+from packvault.ui.templates_ctx import templates
 
 router = APIRouter(tags=["ui"])
 
-_TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "ui" / "templates"
-templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
+@router.get("/favicon.ico", include_in_schema=False)
+async def favicon() -> FileResponse:
+    return FileResponse(STATIC_FAVICON_PATH, media_type="image/x-icon")
 
 
-def _login_context(state: AppState) -> dict:
+@router.get("/favicon.ico/", include_in_schema=False)
+async def favicon_trailing_slash() -> RedirectResponse:
+    return RedirectResponse("/favicon.ico", status_code=301)
+
+
+def _login_context(state: AppState, request: Request) -> dict:
+    error_code = request.query_params.get("error")
+    error_message = UI_FORM_ERROR_MESSAGES.get(error_code) if error_code else None
+    reference_id = request.query_params.get("ref")
+
     return {
         "providers": state.settings.auth.providers,
         "public_url": state.settings.server.public_url,
+        "error_message": error_message,
+        "reference_id": reference_id,
     }
 
 
@@ -30,12 +43,17 @@ async def landing(
     state: AppState = Depends(get_state),
 ):
     if user:
-        return RedirectResponse("/dashboard", status_code=302)
+        redirect_url = post_login_redirect_path(
+            user,
+            state.settings,
+            system_initialized=state.system_initialized,
+        )
+        return RedirectResponse(redirect_url, status_code=302)
 
     return templates.TemplateResponse(
         request,
         "login.html",
-        _login_context(state),
+        _login_context(state, request),
     )
 
 
@@ -47,8 +65,13 @@ async def login_page(
     return templates.TemplateResponse(
         request,
         "login.html",
-        _login_context(state),
+        _login_context(state, request),
     )
+
+
+@router.get("/logged-out", response_class=HTMLResponse)
+async def logged_out_page(request: Request):
+    return templates.TemplateResponse(request, "logged_out.html", {})
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
@@ -59,6 +82,14 @@ async def dashboard(
 ):
     if user is None:
         return RedirectResponse("/login", status_code=302)
+
+    redirect_url = post_login_redirect_path(
+        user,
+        state.settings,
+        system_initialized=state.system_initialized,
+    )
+    if redirect_url != "/dashboard":
+        return RedirectResponse(redirect_url, status_code=302)
 
     repositories = [
         {"name": repo.name, "allow_overwrite": repo.allow_overwrite}
@@ -90,6 +121,8 @@ async def dashboard(
             }
         )
 
+    setup_complete = request.query_params.get("setup") == "complete"
+
     return templates.TemplateResponse(
         request,
         "dashboard.html",
@@ -99,5 +132,6 @@ async def dashboard(
             "snippets": snippets,
             "providers": state.settings.auth.providers,
             "storage_backend": state.settings.storage.backend,
+            "setup_complete": setup_complete,
         },
     )

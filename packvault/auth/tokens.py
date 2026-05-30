@@ -16,17 +16,10 @@ def hash_token(raw_token: str) -> str:
 
 
 def verify_token_hash(raw_token: str, stored_hash: str) -> bool:
-    if not raw_token or not stored_hash:
+    if not raw_token or not stored_hash.startswith("sha256:"):
         return False
 
-    if stored_hash.startswith("sha256:"):
-        expected = stored_hash
-        actual = hash_token(raw_token)
-        return hmac.compare_digest(expected, actual)
-
-    # Backward-compatible plaintext comparison.
-    # Keep temporarily during early development, but remove before v1.
-    return hmac.compare_digest(stored_hash, raw_token)
+    return hmac.compare_digest(stored_hash, hash_token(raw_token))
 
 
 def _normalize_expiry(expires_at: datetime | None) -> datetime | None:

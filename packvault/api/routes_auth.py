@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from typing import Annotated
 
+from authlib.integrations.base_client.errors import OAuthError
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse, Response
 
 from packvault.api.deps import get_state
+from packvault.api.error_handling import log_request_error, login_form_error_redirect
+from packvault.auth.bootstrap import post_login_redirect_path
 from packvault.auth.google import user_from_google_claims
 from packvault.auth.local import authenticate_local
 from packvault.runtime import AppState
@@ -51,7 +54,12 @@ async def login_post(
     user = authenticate_local(username, password, state.settings.auth.local)
     session = state.sessions.create(user)
 
-    response = RedirectResponse(url="/dashboard", status_code=303)
+    redirect_url = post_login_redirect_path(
+        user,
+        state.settings,
+        system_initialized=state.system_initialized,
+    )
+    response = RedirectResponse(url=redirect_url, status_code=303)
     _set_session_cookie(response, session, state)
 
     return response
@@ -59,7 +67,7 @@ async def login_post(
 
 @router.get("/logout")
 async def logout(state: AppState = Depends(get_state)) -> RedirectResponse:
-    response = RedirectResponse(url="/", status_code=303)
+    response = RedirectResponse(url="/logged-out", status_code=303)
     _delete_session_cookie(response, state)
     return response
 
@@ -91,7 +99,11 @@ async def google_callback(
     if state.google_oauth is None:
         raise UnauthorizedError("Google SSO not configured")
 
-    token = await state.google_oauth.google.authorize_access_token(request)
+    try:
+        token = await state.google_oauth.google.authorize_access_token(request)
+    except OAuthError as exc:
+        log_request_error(request, exc)
+        return login_form_error_redirect("google_sign_in_failed")
 
     userinfo = token.get("userinfo")
     if not userinfo:
@@ -100,7 +112,12 @@ async def google_callback(
     user = user_from_google_claims(userinfo)
     session = state.sessions.create(user)
 
-    response = RedirectResponse(url="/dashboard", status_code=303)
+    redirect_url = post_login_redirect_path(
+        user,
+        state.settings,
+        system_initialized=state.system_initialized,
+    )
+    response = RedirectResponse(url=redirect_url, status_code=303)
     _set_session_cookie(response, session, state)
 
     return response

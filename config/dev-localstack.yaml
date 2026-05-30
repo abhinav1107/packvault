@@ -3,7 +3,7 @@ storage:
   s3:
     endpointUrl: ${env.PACKVAULT_S3_ENDPOINT_URL}
     bucket: ${env.PACKVAULT_S3_BUCKET}
-    region: ${env.PACKVAULT_S3_REGION}
+    region: ${env.PACKVAULT_AWS_REGION}
     pathStyle: ${env.PACKVAULT_S3_PATH_STYLE}
     prefix: ${env.PACKVAULT_S3_PREFIX}
   cache:
@@ -52,6 +52,7 @@ security:
 server:
   host: 0.0.0.0
   port: 8080
+  operations_port: 9090
   publicUrl: ${env.PACKVAULT_PUBLIC_URL}
   sessionSecret: ${env.PACKVAULT_SESSION_SECRET}
   maxUploadBytes: ${env.PACKVAULT_MAX_UPLOAD_BYTES}
@@ -60,3 +61,15 @@ server:
 logging:
   level: ${env.PACKVAULT_LOG_LEVEL}
   format: ${env.PACKVAULT_LOG_FORMAT}
+
+database:
+  url: ${env.PACKVAULT_DATABASE_URL}
+
+secrets:
+  encryptAtRest: true
+  encryptionKey:
+    provider: aws_secrets_manager
+    awsSecretsManager:
+      secretId: ${env.PACKVAULT_SECRETS_MANAGER_SECRET_ID}
+      region: ${env.PACKVAULT_AWS_REGION}
+      endpointUrl: ${env.PACKVAULT_AWS_ENDPOINT_URL}

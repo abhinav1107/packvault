@@ -11,7 +11,7 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from packvault.config.settings import S3StorageConfig
-from packvault.storage.base import ArtifactStore, ObjectMeta
+from packvault.storage.base import ArtifactStore, ListPrefixResult, ObjectMeta
 from packvault.utils.errors import ConflictError, NotFoundError, ServiceUnavailableError
 
 _CHUNK_SIZE = 64 * 1024
@@ -176,20 +176,51 @@ class S3ArtifactStore(ArtifactStore):
             except ClientError as exc:
                 raise ServiceUnavailableError(f"S3 bucket unreachable: {exc}") from exc
 
-    async def list_prefix(self, prefix: str, *, max_keys: int = 1) -> list[str]:
+    async def list_prefix(
+        self,
+        prefix: str,
+        *,
+        max_keys: int = 100,
+        continuation_token: str | None = None,
+        start_after: str | None = None,
+    ) -> ListPrefixResult:
         full_prefix = self._full_key(prefix)
+        list_kwargs: dict = {
+            "Bucket": self._config.bucket,
+            "Prefix": full_prefix,
+            "MaxKeys": max_keys,
+        }
+
+        if continuation_token:
+            list_kwargs["ContinuationToken"] = continuation_token
+        elif start_after:
+            list_kwargs["StartAfter"] = self._full_key(start_after)
 
         async with self._session.client("s3", **self._client_kwargs()) as client:
             try:
-                response = await client.list_objects_v2(
-                    Bucket=self._config.bucket,
-                    Prefix=full_prefix,
-                    MaxKeys=max_keys,
-                )
+                response = await client.list_objects_v2(**list_kwargs)
             except ClientError as exc:
                 raise ServiceUnavailableError(f"S3 list failed: {exc}") from exc
 
-        return [
-            self._logical_key(obj["Key"])
-            for obj in response.get("Contents", [])
-        ]
+        return ListPrefixResult(
+            keys=[
+                self._logical_key(obj["Key"])
+                for obj in response.get("Contents", [])
+            ],
+            continuation_token=response.get("NextContinuationToken"),
+        )
+
+    async def delete(self, key: str) -> None:
+        if await self.head(key) is None:
+            raise NotFoundError("Artifact not found")
+
+        full_key = self._full_key(key)
+
+        async with self._session.client("s3", **self._client_kwargs()) as client:
+            try:
+                await client.delete_object(
+                    Bucket=self._config.bucket,
+                    Key=full_key,
+                )
+            except ClientError as exc:
+                raise ServiceUnavailableError(f"S3 delete failed: {exc}") from exc

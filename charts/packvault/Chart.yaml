@@ -2,5 +2,5 @@ apiVersion: v2
 name: packvault
 description: Secure Maven package hosting over local or S3-compatible storage
 type: application
-version: 0.1.2
-appVersion: "v0.1.2"
+version: 0.1.3
+appVersion: "v0.1.3"

@@ -10,7 +10,7 @@ from typing import BinaryIO
 import aiofiles
 import aiofiles.os
 
-from packvault.storage.base import ArtifactStore, ObjectMeta
+from packvault.storage.base import ArtifactStore, ListPrefixResult, ObjectMeta
 from packvault.storage.local import LocalArtifactStore
 from packvault.utils.errors import NotFoundError, ServiceUnavailableError
 
@@ -133,8 +133,31 @@ class CachedArtifactStore(ArtifactStore):
             # Cache health should not make the whole store unavailable.
             pass
 
-    async def list_prefix(self, prefix: str, *, max_keys: int = 1) -> list[str]:
-        return await self._primary.list_prefix(prefix, max_keys=max_keys)
+    async def list_prefix(
+        self,
+        prefix: str,
+        *,
+        max_keys: int = 100,
+        continuation_token: str | None = None,
+        start_after: str | None = None,
+    ) -> ListPrefixResult:
+        return await self._primary.list_prefix(
+            prefix,
+            max_keys=max_keys,
+            continuation_token=continuation_token,
+            start_after=start_after,
+        )
+
+    async def delete(self, key: str) -> None:
+        await self._primary.delete(key)
+
+        try:
+            await self._cache.delete(key)
+        except NotFoundError:
+            pass
+        except Exception:
+            # Cache eviction must not turn a successful primary delete into a failure.
+            pass
 
     def _is_cacheable(self, key: str) -> bool:
         """Return whether a key is safe/useful to cache.

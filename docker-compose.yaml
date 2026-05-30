@@ -1,16 +1,72 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: packvault-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-packvault}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-packvault}
+      POSTGRES_DB: ${POSTGRES_DB:-packvault}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-packvault} -d ${POSTGRES_DB:-packvault}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  localstack:
+    image: localstack/localstack:4.4.0
+    container_name: packvault-localstack
+    ports:
+      - "${LOCALSTACK_HOST_PORT:-4566}:4566"
+    environment:
+      SERVICES: s3,secretsmanager
+      DEBUG: ${LOCALSTACK_DEBUG:-0}
+      AWS_DEFAULT_REGION: ${PACKVAULT_AWS_REGION:-us-east-1}
+    volumes:
+      - localstack-data:/var/lib/localstack
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  localstack-init:
+    image: localstack/localstack:4.4.0
+    container_name: packvault-localstack-init
+    depends_on:
+      localstack:
+        condition: service_healthy
+    environment:
+      LOCALSTACK_HOST: localstack
+      LOCALSTACK_PORT: "4566"
+      AWS_ACCESS_KEY_ID: ${PACKVAULT_AWS_ACCESS_KEY_ID:-test}
+      AWS_SECRET_ACCESS_KEY: ${PACKVAULT_AWS_SECRET_ACCESS_KEY:-test}
+      AWS_DEFAULT_REGION: ${PACKVAULT_AWS_REGION:-us-east-1}
+      PACKVAULT_S3_BUCKET: ${PACKVAULT_S3_BUCKET:-packvault}
+      PACKVAULT_SECRETS_MANAGER_SECRET_ID: ${PACKVAULT_SECRETS_MANAGER_SECRET_ID:-packvault/dev/encryption-key}
+      PACKVAULT_SECRETS_ENCRYPTION_KEY: ${PACKVAULT_SECRETS_ENCRYPTION_KEY:-dev-local-encryption-key}
+    volumes:
+      - ./scripts/localstack-init.sh:/scripts/localstack-init.sh:ro
+    entrypoint: ["/bin/sh", "/scripts/localstack-init.sh"]
+    restart: "no"
+
   packvault:
     image: local/packvault:latest
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     container_name: packvault
     ports:
       - "${PACKVAULT_HOST_PORT:-8080}:8080"
+      - "${PACKVAULT_OPS_PORT:-9090}:9090"
     environment:
-      PACKVAULT_CONFIG: ${PACKVAULT_CONFIG_CONTAINER:-/config/config.yaml}
+      # Path inside the container; ./config is mounted read-only at /config.
+      PACKVAULT_CONFIG: ${PACKVAULT_CONFIG:-/config/dev-localstack.yaml}
 
-      # Local storage mode
+      # Local storage mode (when using config/dev.yaml)
       PACKVAULT_LOCAL_ROOT: ${PACKVAULT_LOCAL_ROOT:-/data/maven}
 
       # Auth / tokens
@@ -32,81 +88,54 @@ services:
       PACKVAULT_LOG_LEVEL: ${PACKVAULT_LOG_LEVEL:-INFO}
       PACKVAULT_LOG_FORMAT: ${PACKVAULT_LOG_FORMAT:-json}
 
-      # S3 / MinIO mode
-      PACKVAULT_S3_ENDPOINT_URL: ${PACKVAULT_S3_ENDPOINT_URL:-http://minio:9000}
+      # LocalStack / AWS-compatible services (S3 + Secrets Manager)
+      PACKVAULT_AWS_ENDPOINT_URL: ${PACKVAULT_AWS_ENDPOINT_URL:-http://localstack:4566}
+      PACKVAULT_AWS_REGION: ${PACKVAULT_AWS_REGION:-us-east-1}
+      PACKVAULT_S3_ENDPOINT_URL: ${PACKVAULT_S3_ENDPOINT_URL:-http://localstack:4566}
       PACKVAULT_S3_BUCKET: ${PACKVAULT_S3_BUCKET:-packvault}
-      PACKVAULT_S3_REGION: ${PACKVAULT_S3_REGION:-us-east-1}
       PACKVAULT_S3_PATH_STYLE: ${PACKVAULT_S3_PATH_STYLE:-true}
       PACKVAULT_S3_PREFIX: ${PACKVAULT_S3_PREFIX:-repositories}
+      PACKVAULT_SECRETS_MANAGER_SECRET_ID: ${PACKVAULT_SECRETS_MANAGER_SECRET_ID:-packvault/dev/encryption-key}
+      PACKVAULT_SECRETS_ENCRYPTION_KEY: ${PACKVAULT_SECRETS_ENCRYPTION_KEY:-dev-local-encryption-key}
       PACKVAULT_CACHE_PATH: ${PACKVAULT_CACHE_PATH:-/cache/maven}
       PACKVAULT_CACHE_METADATA_TTL_SECONDS: ${PACKVAULT_CACHE_METADATA_TTL_SECONDS:-60}
       PACKVAULT_CACHE_SNAPSHOT_TTL_SECONDS: ${PACKVAULT_CACHE_SNAPSHOT_TTL_SECONDS:-300}
 
-      # AWS SDK variables used by aioboto3.
-      # For MinIO profile, these default to the MinIO root credentials.
-      AWS_ACCESS_KEY_ID: ${PACKVAULT_S3_ACCESS_KEY_ID:-}
-      AWS_SECRET_ACCESS_KEY: ${PACKVAULT_S3_SECRET_ACCESS_KEY:-}
-      AWS_DEFAULT_REGION: ${PACKVAULT_S3_REGION:-us-east-1}
+      # AWS SDK credentials (LocalStack accepts any value; test/test is conventional)
+      AWS_ACCESS_KEY_ID: ${PACKVAULT_AWS_ACCESS_KEY_ID:-test}
+      AWS_SECRET_ACCESS_KEY: ${PACKVAULT_AWS_SECRET_ACCESS_KEY:-test}
+      AWS_DEFAULT_REGION: ${PACKVAULT_AWS_REGION:-us-east-1}
 
       # Optional Google SSO
       PACKVAULT_GOOGLE_CLIENT_ID: ${PACKVAULT_GOOGLE_CLIENT_ID:-}
       PACKVAULT_GOOGLE_CLIENT_SECRET: ${PACKVAULT_GOOGLE_CLIENT_SECRET:-}
 
+      # PostgreSQL
+      PACKVAULT_DATABASE_URL: ${PACKVAULT_DATABASE_URL:-postgresql+asyncpg://packvault:packvault@postgres:5432/packvault}
+
       # Optional generic OIDC
       PACKVAULT_OIDC_CLIENT_ID: ${PACKVAULT_OIDC_CLIENT_ID:-}
       PACKVAULT_OIDC_CLIENT_SECRET: ${PACKVAULT_OIDC_CLIENT_SECRET:-}
     volumes:
-      - ${PACKVAULT_CONFIG_FILE:-./config/dev.yaml}:${PACKVAULT_CONFIG_CONTAINER:-/config/config.yaml}:ro
+      - ./config:/config:ro
       - packvault-data:/data/maven
       - packvault-cache:/cache/maven
     depends_on:
-      minio-init:
-        condition: service_completed_successfully
-        required: false
-    restart: unless-stopped
-
-  minio:
-    image: minio/minio:latest
-    container_name: packvault-minio
-    command: server /data --console-address ":9001"
-    ports:
-      - "${MINIO_API_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
-    volumes:
-      - minio-data:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
-
-  minio-init:
-    image: minio/mc:latest
-    container_name: packvault-minio-init
-    depends_on:
-      minio:
+      postgres:
         condition: service_healthy
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
-      PACKVAULT_S3_BUCKET: ${PACKVAULT_S3_BUCKET:-packvault}
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD &&
-      mc mb --ignore-existing local/$$PACKVAULT_S3_BUCKET
-      "
-    restart: "no"
+      localstack-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
 
 volumes:
+  postgres-data:
+    name: packvault-postgres-data
+
+  localstack-data:
+    name: packvault-localstack-data
+
   packvault-data:
     name: packvault-data
 
   packvault-cache:
     name: packvault-cache
-
-  minio-data:
-    name: packvault-minio-data

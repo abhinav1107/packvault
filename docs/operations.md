@@ -1,23 +1,30 @@
 # Operations
 
+Operator-focused notes for running PackVault day to day: local Compose, database setup, upgrades, health and metrics, encryption, and recovery.
+
 ## Local Docker Compose workflow
 
 PackVault's Docker Compose setup starts:
 
 ```text
+packvault-postgres
+packvault-localstack
+packvault-localstack-init
 packvault
-packvault-minio
-packvault-minio-init
 ```
 
-MinIO runs even when PackVault is using local disk mode. This keeps the local development workflow simple.
+- **PostgreSQL** stores application metadata (setup state, tokens, RBAC).
+- **LocalStack** emulates AWS **S3** (artifact storage) and **Secrets Manager** (encryption master key).
+- **localstack-init** creates the artifact bucket and encryption-key secret before PackVault starts.
 
-Choose the PackVault backend by changing `PACKVAULT_CONFIG_FILE` in `.env`.
+Default config: `config/dev-localstack.yaml` (S3 + Secrets Manager via LocalStack).
 
-### Local disk mode
+Choose a different PackVault profile by setting `PACKVAULT_CONFIG` in `.env`.
+
+### LocalStack mode (default)
 
 ```env
-PACKVAULT_CONFIG_FILE=./config/dev.yaml
+PACKVAULT_CONFIG=/config/dev-localstack.yaml
 ```
 
 Run:
@@ -26,10 +33,30 @@ Run:
 docker compose up --build
 ```
 
-### S3 / MinIO mode
+This uses:
+
+- S3-compatible storage at `http://localstack:4566`
+- Secrets Manager at the same endpoint for `encrypt_at_rest`
+- PostgreSQL for the setup wizard and persistence
+
+LocalStack health and resources:
+
+```text
+http://localhost:4566/_localstack/health
+```
+
+Default LocalStack credentials (conventional, not secret):
+
+```text
+test / test
+```
+
+### Local disk mode (no S3)
+
+For lightweight runs without S3-backed storage (LocalStack still starts, but PackVault ignores it):
 
 ```env
-PACKVAULT_CONFIG_FILE=./config/dev-s3.yaml
+PACKVAULT_CONFIG=/config/dev.yaml
 ```
 
 Run:
@@ -38,45 +65,209 @@ Run:
 docker compose up --build
 ```
 
-MinIO console is available at:
+Artifacts are stored on the `packvault-data` volume under `/data/maven`.
 
-```text
-http://localhost:9001
+Compose exposes two application ports on the PackVault container:
+
+| Port | Purpose |
+|------|---------|
+| `8080` | Main application (UI, auth, Maven API, `/ping`) |
+| `9090` | Operations (health probes, Prometheus `/metrics`) |
+
+Set host mappings with `PACKVAULT_HOST_PORT` and `PACKVAULT_OPS_PORT` in `.env` if needed.
+
+## Database and one-time setup
+
+PackVault does **not** apply schema changes or seed data on ordinary startup. Initialization is a deliberate, one-time action performed by the bootstrap platform admin through the UI.
+
+### Prerequisites
+
+1. Configure `database.url` (env: `PACKVAULT_DATABASE_URL`) so PackVault can reach PostgreSQL.
+2. Sign in as the **bootstrap platform admin** (credentials from environment only; see [Bootstrap admin recovery](#bootstrap-platform-admin-recovery)).
+3. On first login, you are redirected to `/setup` until initialization completes.
+
+### Setup page (`/setup`)
+
+The setup page shows:
+
+- PostgreSQL connection status
+- Whether encryption at rest is enabled and whether the master key is available
+- How many Maven tokens from config will be imported (hashes only)
+
+Only the bootstrap admin can open the setup flow. Other signed-in users receive forbidden if they try.
+
+### Initialize PackVault
+
+Click **Initialize PackVault** (or call `POST /admin/setup/initialize` with a session cookie). A single action:
+
+1. Runs Alembic migrations (`upgrade head`) if tables are not present yet.
+2. Writes `system_state` (`initialized`, `initialized_at`, `initialized_by`, encryption key fingerprint when applicable).
+3. Seeds default groups (`publishers`, `readers`) and group permissions.
+4. Imports Maven token definitions from current config/env into PostgreSQL (hashed values only; encrypted when `secrets.encrypt_at_rest` is true).
+5. Redirects to the dashboard with success confirmation.
+
+After initialization:
+
+- `/setup` shows an “already completed” page if visited again.
+- `POST /admin/setup/initialize` returns **409 Conflict** if initialization was already performed.
+- Normal navigation no longer offers setup.
+
+### Before initialization
+
+- Env-based bootstrap admin login and Maven tokens from config/env work as today.
+- PostgreSQL must be reachable for setup; the app can start with an empty database awaiting setup.
+
+### Startup behavior (read-only checks)
+
+On boot, PackVault **never** runs DDL or seeds data automatically.
+
+| State | Behavior |
+|-------|----------|
+| Not initialized | App serves normally; env auth and config tokens work; setup available to bootstrap admin. |
+| Initialized, DB unreachable or schema missing | Process fails fast with a clear ops error. |
+| Initialized, encryption enabled, key fingerprint mismatch | Fail fast — verify `PACKVAULT_SECRETS_ENCRYPTION_KEY` or the configured AWS Secrets Manager secret. |
+
+## Upgrading PackVault
+
+PackVault separates **first-time initialization** from **schema upgrades**:
+
+| Action | When | How |
+|--------|------|-----|
+| First-time bootstrap | Empty database, not yet initialized | UI at `/setup` or `POST /admin/setup/initialize` (bootstrap admin) |
+| Schema upgrade | Database already initialized; new PackVault release includes Alembic revisions | Run migrations manually (below) |
+
+Ordinary application startup does **not** run `alembic upgrade`. After initialization, deploying a newer image does not apply new migrations automatically.
+
+### Before you upgrade
+
+1. Read the release notes for database or config changes.
+2. Back up PostgreSQL.
+3. Prefer upgrading with a single PackVault instance (or one replica) applying migrations before scaling out.
+
+### Run migrations on an initialized database
+
+Use the same Alembic entry point as the setup wizard (`upgrade head`). The database URL must match `PACKVAULT_DATABASE_URL` / `database.url`.
+
+**Docker Compose** (from the project root, PackVault container running):
+
+```bash
+docker compose exec packvault python -c \
+  'from packvault.setup.service import run_migrations; import os; run_migrations(os.environ["PACKVAULT_DATABASE_URL"])'
 ```
 
-Default local credentials are:
+**From source** (repository root, venv active, URL exported):
 
-```text
-minioadmin / minioadmin
+```bash
+export PACKVAULT_DATABASE_URL='postgresql+asyncpg://user:pass@localhost:5432/packvault'
+python -c 'from packvault.setup.service import run_migrations; import os; run_migrations(os.environ["PACKVAULT_DATABASE_URL"])'
 ```
 
-These are acceptable for local development only. Change them in `.env` for anything else.
+**Kubernetes** (adjust namespace, pod name, and secret-backed env as needed):
+
+```bash
+kubectl exec -it deploy/packvault -- python -c \
+  'from packvault.setup.service import run_migrations; import os; run_migrations(os.environ["PACKVAULT_DATABASE_URL"])'
+```
+
+The application image includes `alembic.ini` and `alembic/` at `/app` (`PACKVAULT_APP_ROOT` defaults there in containers).
+
+### After migrations
+
+1. Roll out the new PackVault version (or restart remaining replicas).
+2. Confirm `/startupz`, `/livez`, and `/readyz` on the operations port.
+3. Smoke-test Maven read/write with a scoped token.
+
+### What not to do
+
+- Do **not** call `POST /admin/setup/initialize` again on an initialized system — it returns **409 Conflict**.
+- Do **not** expect `/setup` to apply future schema changes; it is for the one-time bootstrap only.
+- Do **not** run migrations against a production database without a backup and a maintenance window when revisions are non-trivial.
+
+When a release has no new files under `alembic/versions/`, the commands above are a no-op at `head` and are still safe to run.
+
+## Bootstrap platform admin recovery
+
+The bootstrap platform admin is **never** stored in PostgreSQL. Credentials always come from environment / config substitution:
+
+| Item | Source |
+|------|--------|
+| Username | `PACKVAULT_LOCAL_ADMIN_USERNAME` |
+| Password | `PACKVAULT_LOCAL_ADMIN_PASSWORD_HASH` (Argon2 hash, not plaintext) |
+
+If you lose admin access:
+
+1. Generate a new Argon2 hash:
+
+   ```bash
+   python scripts/hash_password.py 'your-new-password'
+   ```
+
+2. Update `PACKVAULT_LOCAL_ADMIN_PASSWORD_HASH` in your deployment (`.env`, Kubernetes Secret, etc.).
+3. Restart PackVault.
+
+No database surgery is required. The bootstrap admin retains platform privileges via session identity from env auth, not from a DB password row.
+
+## Encryption at rest
+
+Encryption is **opt-in** via `secrets.encrypt_at_rest` in config. When disabled (typical local dev), secret fields are stored as provided. When enabled, selected fields are encrypted with AES-GCM using a master key that is **never** stored in PostgreSQL.
+
+### What is encrypted
+
+| Field | When enabled |
+|-------|----------------|
+| `tokens.token_hash` | SHA-256 hashes imported at setup |
+| Future `users.password_hash` | Argon2 hashes (bootstrap admin excluded) |
+
+Usernames, repository names, group structure, audit metadata, and system flags are not encrypted.
+
+### Key providers
+
+| Provider | Configuration | Master key source |
+|----------|---------------|-------------------|
+| `environment` | `secrets.encryption_key.environment.variable` | Env var (e.g. `PACKVAULT_SECRETS_ENCRYPTION_KEY`) |
+| `aws_secrets_manager` | `secret_id`, `region`, optional `endpoint_url` | AWS Secrets Manager via standard credential chain |
+
+At initialization, PackVault records a **key fingerprint** in `system_state`. On later startups, a mismatch fails fast so operators detect a wrong or rotated key early.
+
+### Decrypt failures
+
+If the wrong key is used or ciphertext is corrupted, affected rows are marked `secret_status: decrypt_failed`. The application keeps running; bootstrap admin (env) remains available. Affected tokens must be re-provisioned (re-run setup is not possible — update token hashes in env and fix rows operationally, or plan a controlled DB reset in non-production).
+
+The setup page surfaces whether the key is reachable when encryption is enabled.
+
+### LocalStack dev profile
+
+`config/dev-localstack.yaml` sets `encryptAtRest: true` with provider `aws_secrets_manager` pointing at LocalStack. `scripts/localstack-init.sh` seeds the secret; `PACKVAULT_SECRETS_ENCRYPTION_KEY` in `.env` is used when testing the environment provider locally.
 
 ## Health endpoints
 
+Health and readiness probes are served only on the **operations port** (`server.operations_port`, default **9090**). They are **not** available on the main application port (`8080`).
+
 | Endpoint    | Kubernetes probe  | Purpose                               |
 |-------------|-------------------|---------------------------------------|
-| `/startupz` | `startupProbe`    | one-time startup completed            |
-| `/livez`    | `livenessProbe`   | process is alive; no dependency I/O   |
-| `/readyz`   | `readinessProbe`  | safe to serve traffic; checks storage |
-| `/metrics`  | Prometheus scrape | metrics endpoint                      |
+| `/startupz` | `startupProbe`    | One-time startup completed            |
+| `/livez`    | `livenessProbe`   | Process is alive; no dependency I/O   |
+| `/readyz`   | `readinessProbe`  | Safe to serve traffic; checks storage |
+| `/metrics`  | Prometheus scrape | Prometheus metrics                    |
+
+The Helm chart sets `probes.port: ops` so probes target the operations Service port.
 
 Responses use:
 
-| State               |  HTTP |
-|---------------------|------:|
+| State               | HTTP |
+|---------------------|-----:|
 | healthy             | `200` |
 | unhealthy/not ready | `503` |
 
-Example:
+Examples (Docker Compose defaults):
 
 ```bash
-curl -i http://localhost:8080/livez
-curl -i http://localhost:8080/startupz
-curl -i http://localhost:8080/readyz
+curl -i http://localhost:9090/livez
+curl -i http://localhost:9090/startupz
+curl -i http://localhost:9090/readyz
 ```
 
-Expected healthy responses:
+Expected healthy JSON bodies:
 
 ```json
 {"status":"ok"}
@@ -90,6 +281,12 @@ Expected healthy responses:
 {"status":"ready"}
 ```
 
+Public reachability on the main port (no storage check):
+
+```bash
+curl -i http://localhost:8080/ping
+```
+
 ## Typical runtime behavior
 
 | Condition                | `/livez` | `/startupz` | `/readyz` |
@@ -99,137 +296,38 @@ Expected healthy responses:
 | storage unavailable      |    `200` |       `200` |     `503` |
 | shutting down            |    `503` |       `200` |     `503` |
 
-A temporary S3 or MinIO issue should make `/readyz` fail, but should not cause liveness restarts.
+A temporary S3 or storage issue should make `/readyz` fail without necessarily failing `/livez` (avoid unnecessary liveness restarts).
 
 ## Metrics
 
-Prometheus metrics are exposed at:
+Prometheus metrics are exposed **only** on the operations port:
 
 ```text
-/metrics
+http://<host>:9090/metrics
 ```
 
 Example:
 
 ```bash
-curl http://localhost:8080/metrics
+curl http://localhost:9090/metrics
 ```
+
+`GET /metrics` on port `8080` returns **404**.
 
 Current metric families include:
 
 ```text
-maven_requests_total
-maven_request_duration_seconds
-maven_storage_operations_total
-maven_storage_operation_errors_total
-maven_auth_failures_total
-maven_upload_bytes_total
-maven_download_bytes_total
+packvault_http_requests_total
+packvault_http_request_duration_seconds
 ```
 
-## Basic artifact validation
+**Network exposure:** Restrict port `9090` to your monitoring network (firewall, Kubernetes NetworkPolicy, or internal Service only). The main port carries UI and Maven traffic and should remain reachable to clients as designed.
 
-Set raw token values in your shell:
+## Artifact management (UI)
 
-```bash
-export PACKVAULT_CI_TOKEN_RAW='<raw-ci-token>'
-export PACKVAULT_READER_TOKEN_RAW='<raw-reader-token>'
-```
+Session-authenticated operators can list, search, and delete stored objects at `/artifacts` (linked from the dashboard header). This is separate from the Maven API (no `DELETE` on repository paths). Deletes are confirmed in the UI, emit an audit log line with `request_id`, and require the same session access as the dashboard.
 
-Upload to releases:
-
-```bash
-echo "hello packvault" > /tmp/test-0.1.0.txt
-
-curl -i \
-  -u "ci-publisher:${PACKVAULT_CI_TOKEN_RAW}" \
-  -X PUT \
-  --data-binary @/tmp/test-0.1.0.txt \
-  http://localhost:8080/releases/com/rtifact/test/0.1.0/test-0.1.0.txt
-```
-
-Expected:
-
-```text
-HTTP/1.1 201 Created
-```
-
-Download:
-
-```bash
-curl -i \
-  -u "app-reader:${PACKVAULT_READER_TOKEN_RAW}" \
-  http://localhost:8080/releases/com/rtifact/test/0.1.0/test-0.1.0.txt
-```
-
-Expected:
-
-```text
-HTTP/1.1 200 OK
-hello packvault
-```
-
-Upload the same release again:
-
-```bash
-curl -i \
-  -u "ci-publisher:${PACKVAULT_CI_TOKEN_RAW}" \
-  -X PUT \
-  --data-binary @/tmp/test-0.1.0.txt \
-  http://localhost:8080/releases/com/rtifact/test/0.1.0/test-0.1.0.txt
-```
-
-Expected:
-
-```text
-HTTP/1.1 409 Conflict
-```
-
-Snapshot overwrite test:
-
-```bash
-echo "snapshot v1" > /tmp/test-0.1.0-SNAPSHOT.txt
-
-curl -i \
-  -u "ci-publisher:${PACKVAULT_CI_TOKEN_RAW}" \
-  -X PUT \
-  --data-binary @/tmp/test-0.1.0-SNAPSHOT.txt \
-  http://localhost:8080/snapshots/com/rtifact/test/0.1.0-SNAPSHOT/test-0.1.0-SNAPSHOT.txt
-
-echo "snapshot v2" > /tmp/test-0.1.0-SNAPSHOT.txt
-
-curl -i \
-  -u "ci-publisher:${PACKVAULT_CI_TOKEN_RAW}" \
-  -X PUT \
-  --data-binary @/tmp/test-0.1.0-SNAPSHOT.txt \
-  http://localhost:8080/snapshots/com/rtifact/test/0.1.0-SNAPSHOT/test-0.1.0-SNAPSHOT.txt
-```
-
-Expected both times:
-
-```text
-HTTP/1.1 201 Created
-```
-
-## Logs
-
-Default logs are JSON to stdout.
-
-Write attempts emit audit entries like:
-
-```json
-{
-  "logger": "packvault.audit",
-  "message": "artifact_write",
-  "repository": "releases",
-  "path": "com/rtifact/test/0.1.0/test-0.1.0.txt",
-  "principal": "ci-publisher",
-  "status_code": 201,
-  "bytes_uploaded": 16
-}
-```
-
-Do not log raw tokens, passwords, cookies, authorization headers, or client secrets.
+Default listing hides checksum sidecars (`.sha1`, `.md5`, `.asc`) and `maven-metadata.xml`; use **Show all** to include them.
 
 ## Shutdown
 
@@ -245,4 +343,4 @@ Remove volumes too:
 docker compose down -v
 ```
 
-`down -v` deletes local artifact data, cache, and MinIO data.
+`down -v` deletes local artifact data, cache, LocalStack state, and PostgreSQL data.

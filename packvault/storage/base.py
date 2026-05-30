@@ -14,6 +14,12 @@ class ObjectMeta:
     content_type: str | None = None
 
 
+@dataclass(frozen=True)
+class ListPrefixResult:
+    keys: list[str]
+    continuation_token: str | None = None
+
+
 class ArtifactStore(ABC):
     @abstractmethod
     async def head(self, key: str) -> ObjectMeta | None:
@@ -46,5 +52,16 @@ class ArtifactStore(ABC):
         """Raise if storage is unavailable."""
 
     @abstractmethod
-    async def list_prefix(self, prefix: str, *, max_keys: int = 1) -> list[str]:
-        """List object keys under a prefix."""
+    async def list_prefix(
+        self,
+        prefix: str,
+        *,
+        max_keys: int = 100,
+        continuation_token: str | None = None,
+        start_after: str | None = None,
+    ) -> ListPrefixResult:
+        """List object keys under a prefix with pagination."""
+
+    @abstractmethod
+    async def delete(self, key: str) -> None:
+        """Delete an object. Raises NotFoundError when the object does not exist."""

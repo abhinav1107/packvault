@@ -16,6 +16,10 @@ def get_state(request: Request) -> AppState:
     return request.app.state.app_state  # type: ignore[attr-defined]
 
 
+def get_optional_app_state(request: Request) -> AppState | None:
+    return getattr(request.app.state, "app_state", None)
+
+
 def get_settings(state: AppState = Depends(get_state)) -> Settings:
     return state.settings
 

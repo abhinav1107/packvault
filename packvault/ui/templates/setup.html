@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PackVault — Setup</title>
+  {% include "_head_icons.html" %}
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main class="container">
+    <header class="header">
+      <h1>Initialize PackVault</h1>
+      <a href="/logout">Logout</a>
+    </header>
+
+    <p class="tagline">One-time database setup for {{ user.name or user.subject }}</p>
+
+    {% if error_message %}
+    <div class="banner error" role="alert">
+      <p>{{ error_message }}</p>
+      {% if reference_id %}
+      <p class="reference">Reference: <code>{{ reference_id }}</code></p>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <section class="card">
+      <h2>Database</h2>
+      {% if database_configured %}
+        {% if database_reachable %}
+        <p class="status ok">Connected — {{ database_detail }}</p>
+        {% else %}
+        <p class="status bad">Not reachable — {{ database_detail }}</p>
+        {% endif %}
+      {% else %}
+      <p class="status bad">Not configured — set <code>PACKVAULT_DATABASE_URL</code> and restart.</p>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <h2>Encryption at rest</h2>
+      {% if encryption.encrypt_at_rest %}
+      <p>Encryption is <strong>enabled</strong>.</p>
+      <p><strong>Provider:</strong> {{ encryption.provider }}</p>
+      {% if encryption.provider_detail %}
+      <p><strong>Source:</strong> <code>{{ encryption.provider_detail }}</code></p>
+      {% endif %}
+      {% if encryption.endpoint %}
+      <p><strong>Endpoint:</strong> <code>{{ encryption.endpoint }}</code></p>
+      {% endif %}
+      {% if encryption.key_ready %}
+      <p class="status ok">Master key is available at startup.</p>
+      <p class="hint">Keep this key safe. Loss requires re-provisioning encrypted secret fields.</p>
+      {% else %}
+      <p class="status bad">Master key is not available. Fix the configured provider before initializing.</p>
+      {% endif %}
+      {% else %}
+      <p>Encryption is <strong>disabled</strong> (typical for local development).</p>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <h2>What initialization does</h2>
+      <ul>
+        <li>Creates PostgreSQL schema (tables are not created on ordinary startup)</li>
+        <li>Records initialization metadata in <code>system_state</code></li>
+        <li>Imports {{ token_count }} Maven token definition(s) from current configuration (hashes only)</li>
+        <li>Seeds default RBAC groups (<code>publishers</code>, <code>readers</code>)</li>
+        <li>Stores the encryption key fingerprint when encryption is enabled</li>
+      </ul>
+      <p class="hint">The bootstrap admin password stays in environment configuration only — it is never stored in PostgreSQL.</p>
+    </section>
+
+    <section class="card">
+      <h2>Ready?</h2>
+      <form method="post" action="/admin/setup/initialize">
+        <button type="submit" {% if not database_configured or not database_reachable or (encryption.encrypt_at_rest and not encryption.key_ready) %}disabled{% endif %}>
+          Initialize PackVault
+        </button>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import copy
 import json
 import logging
+import logging.config
 import os
 import sys
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal
+
+from uvicorn.config import LOGGING_CONFIG
 
 from packvault.utils.request_id import get_request_id
 
@@ -145,6 +149,33 @@ class StandardFormatter(logging.Formatter):
         return line
 
 
+def build_uvicorn_log_config(options: LoggingOptions) -> dict[str, Any]:
+    """Uvicorn error/startup logging only; HTTP access lines use app middleware."""
+    config = copy.deepcopy(LOGGING_CONFIG)
+    for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+        config["loggers"][name]["level"] = options.level_name
+    return config
+
+
+def setup_http_access_logging(options: LoggingOptions) -> None:
+    """App-port HTTP access lines (uvicorn-style), independent of uvicorn servers."""
+    from uvicorn.logging import AccessFormatter
+
+    http_logger = logging.getLogger("packvault.http")
+    http_logger.handlers.clear()
+    http_logger.setLevel(options.level)
+    http_logger.propagate = False
+
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(
+        AccessFormatter(
+            fmt='%(levelprefix)s %(client_addr)s - "%(request_line)s" %(status_code)s',
+            use_colors=False,
+        )
+    )
+    http_logger.addHandler(handler)
+
+
 def setup_logging(options: LoggingOptions | None = None, **kwargs: Any) -> LoggingOptions:
     """Configure root logger. Pass LoggingOptions or keyword overrides for tests/CLI."""
     if options is None:
@@ -154,6 +185,8 @@ def setup_logging(options: LoggingOptions | None = None, **kwargs: Any) -> Loggi
             settings_level=kwargs.get("settings_level"),
             settings_format=kwargs.get("settings_format"),
         )
+
+    logging.config.dictConfig(build_uvicorn_log_config(options))
 
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(
@@ -165,9 +198,17 @@ def setup_logging(options: LoggingOptions | None = None, **kwargs: Any) -> Loggi
     root.addHandler(handler)
     root.setLevel(options.level)
 
-    # Align common library loggers with app level.
-    for name in ("uvicorn", "uvicorn.error", "uvicorn.access", "fastapi"):
+    for name in (
+        "fastapi",
+        "packvault",
+        "packvault.access",
+        "packvault.http",
+        "packvault.operations",
+        "packvault.audit",
+    ):
         logging.getLogger(name).setLevel(options.level)
+
+    setup_http_access_logging(options)
 
     return options
 
@@ -186,8 +227,8 @@ def _sanitize_log_fields(fields: dict[str, Any]) -> dict[str, Any]:
     return sanitized
 
 
-def audit_log(**fields: Any) -> None:
-    """Structured audit entry for write operations (design doc section 15)."""
+def audit_log(*, event: str = "artifact_write", **fields: Any) -> None:
+    """Structured audit entry for repository operations (writes, deletes, etc.)."""
     logger = logging.getLogger("packvault.audit")
     safe_fields = _sanitize_log_fields(fields)
-    logger.info("artifact_write", extra={"extra_fields": safe_fields})
+    logger.info(event, extra={"extra_fields": safe_fields})

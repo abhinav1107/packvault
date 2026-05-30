@@ -4,14 +4,23 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>PackVault — Dashboard</title>
+  {% include "_head_icons.html" %}
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
   <main class="container">
     <header class="header">
       <h1>Dashboard</h1>
-      <a href="/logout">Logout</a>
+      {% with active='dashboard' %}
+      {% include "_nav.html" %}
+      {% endwith %}
     </header>
+
+    {% if setup_complete %}
+    <div class="banner success" role="status">
+      <p>PackVault initialization completed successfully.</p>
+    </div>
+    {% endif %}
 
     <section class="card">
       <h2>Signed in</h2>

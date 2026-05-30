@@ -10,11 +10,15 @@ from packvault.auth.passwords import hash_password
 from packvault.auth.sessions import SessionManager
 from packvault.auth.tokens import TokenRegistry
 from packvault.config.settings import AuthConfig, LocalAuthConfig, ServerConfig, Settings
+from packvault.db.engine import create_database_manager
 from packvault.main import create_app
 from packvault.observability.health import check_live, check_ready, check_startup
 from packvault.repositories.registry import build_registry
 from packvault.runtime import AppState
+from packvault.secrets.encryption import EncryptionContext
+from packvault.secrets.protector import SecretProtector
 from packvault.storage.local import LocalArtifactStore
+from tests.asgi_helpers import asgi_with_local_port
 
 
 def make_test_settings() -> Settings:
@@ -30,18 +34,39 @@ def make_test_settings() -> Settings:
     )
 
 
+def _make_app_state(settings: Settings, *, startup_complete: bool) -> AppState:
+    database = create_database_manager(settings.database.url)
+    encryption = EncryptionContext(enabled=False, key=None, fingerprint=None)
+    return AppState(
+        settings=settings,
+        store=LocalArtifactStore(Path(settings.storage.local.root)),
+        repositories=build_registry(settings),
+        tokens=TokenRegistry.from_config([]),
+        sessions=SessionManager(settings.server.session_secret),
+        database=database,
+        encryption=encryption,
+        secret_protector=SecretProtector(encryption),
+        startup_complete=startup_complete,
+    )
+
+
 @pytest.mark.asyncio
 async def test_probe_functions() -> None:
     settings = make_test_settings()
 
     with tempfile.TemporaryDirectory() as tmp:
         store = LocalArtifactStore(Path(tmp))
+        database = create_database_manager(settings.database.url)
+        encryption = EncryptionContext(enabled=False, key=None, fingerprint=None)
         state = AppState(
             settings=settings,
             store=store,
             repositories=build_registry(settings),
             tokens=TokenRegistry.from_config([]),
             sessions=SessionManager(settings.server.session_secret),
+            database=database,
+            encryption=encryption,
+            secret_protector=SecretProtector(encryption),
             startup_complete=False,
         )
 
@@ -63,38 +88,58 @@ async def test_probe_functions() -> None:
 
 
 @pytest.mark.asyncio
-async def test_health_endpoints_via_http(test_settings: Settings) -> None:
+async def test_health_endpoints_on_operations_port(test_settings: Settings) -> None:
     app = create_app(test_settings)
-    app.state.app_state = AppState(
-        settings=test_settings,
-        store=LocalArtifactStore(Path(test_settings.storage.local.root)),
-        repositories=build_registry(test_settings),
-        tokens=TokenRegistry.from_config([]),
-        sessions=SessionManager(test_settings.server.session_secret),
-        startup_complete=True,
-    )
+    app.state.app_state = _make_app_state(test_settings, startup_complete=True)
 
-    transport = ASGITransport(app=app)
+    transport = ASGITransport(
+        app=asgi_with_local_port(app, test_settings.server.operations_port)
+    )
 
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         assert (await client.get("/livez")).status_code == 200
         assert (await client.get("/startupz")).json()["status"] == "started"
         assert (await client.get("/readyz")).json()["status"] == "ready"
+        assert (await client.get("/metrics")).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_health_endpoints_not_on_main_port(test_settings: Settings) -> None:
+    app = create_app(test_settings)
+    app_state = _make_app_state(test_settings, startup_complete=True)
+    app.state.app_state = app_state
+
+    transport = ASGITransport(app=asgi_with_local_port(app, test_settings.server.port))
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        assert (await client.get("/livez")).status_code == 404
+        assert (await client.get("/startupz")).status_code == 404
+        assert (await client.get("/readyz")).status_code == 404
+        assert (await client.get("/metrics")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_operations_port_rejects_app_routes(test_settings: Settings) -> None:
+    app = create_app(test_settings)
+    app.state.app_state = _make_app_state(test_settings, startup_complete=True)
+
+    transport = ASGITransport(
+        app=asgi_with_local_port(app, test_settings.server.operations_port)
+    )
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        assert (await client.get("/ping")).status_code == 404
+        assert (await client.get("/dashboard")).status_code == 404
 
 
 @pytest.mark.asyncio
 async def test_readyz_fails_when_not_started(test_settings: Settings) -> None:
     app = create_app(test_settings)
-    app.state.app_state = AppState(
-        settings=test_settings,
-        store=LocalArtifactStore(Path(test_settings.storage.local.root)),
-        repositories=build_registry(test_settings),
-        tokens=TokenRegistry.from_config([]),
-        sessions=SessionManager(test_settings.server.session_secret),
-        startup_complete=False,
-    )
+    app.state.app_state = _make_app_state(test_settings, startup_complete=False)
 
-    transport = ASGITransport(app=app)
+    transport = ASGITransport(
+        app=asgi_with_local_port(app, test_settings.server.operations_port)
+    )
 
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         assert (await client.get("/livez")).status_code == 200

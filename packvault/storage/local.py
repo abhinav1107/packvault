@@ -9,7 +9,7 @@ from typing import BinaryIO
 import aiofiles
 import aiofiles.os
 
-from packvault.storage.base import ArtifactStore, ObjectMeta
+from packvault.storage.base import ArtifactStore, ListPrefixResult, ObjectMeta
 from packvault.utils.errors import ConflictError, NotFoundError, ServiceUnavailableError
 
 _CHUNK_SIZE = 64 * 1024
@@ -106,10 +106,6 @@ class LocalArtifactStore(ArtifactStore):
             temp_path.unlink(missing_ok=True)
             raise
 
-    async def exists(self, key: str) -> bool:
-        meta = await self.head(key)
-        return meta is not None
-
     async def check_health(self) -> None:
         await aiofiles.os.makedirs(self._root, exist_ok=True)
 
@@ -122,21 +118,50 @@ class LocalArtifactStore(ArtifactStore):
         except OSError as e:
             raise ServiceUnavailableError(f"Local storage not writable: {e}") from e
 
-    async def list_prefix(self, prefix: str, *, max_keys: int = 1) -> list[str]:
+    async def list_prefix(
+        self,
+        prefix: str,
+        *,
+        max_keys: int = 100,
+        continuation_token: str | None = None,
+        start_after: str | None = None,
+    ) -> ListPrefixResult:
         base = self._resolve(prefix)
 
         if not base.exists():
-            return []
+            return ListPrefixResult(keys=[])
+
+        resume_after = continuation_token if continuation_token is not None else start_after
 
         if base.is_file():
-            return [prefix]
+            if resume_after is not None:
+                return ListPrefixResult(keys=[])
+            return ListPrefixResult(keys=[prefix])
 
         keys: list[str] = []
 
         for path in base.rglob("*"):
             if path.is_file():
                 keys.append(str(path.relative_to(self._root)))
-                if len(keys) >= max_keys:
-                    break
 
-        return keys
+        keys.sort()
+
+        if resume_after is not None:
+            keys = [key for key in keys if key > resume_after]
+
+        page = keys[:max_keys]
+        next_token = page[-1] if len(keys) > max_keys else None
+        return ListPrefixResult(keys=page, continuation_token=next_token)
+
+    async def delete(self, key: str) -> None:
+        path = self._resolve(key)
+
+        if not path.is_file():
+            raise NotFoundError("Artifact not found")
+
+        try:
+            await aiofiles.os.remove(path)
+        except FileNotFoundError:
+            raise NotFoundError("Artifact not found") from None
+        except OSError as exc:
+            raise ServiceUnavailableError(f"Storage error: {exc}") from exc

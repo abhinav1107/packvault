@@ -44,6 +44,7 @@ security:
 server:
   host: 0.0.0.0
   port: 8080
+  operations_port: 9090
   publicUrl: ${env.PACKVAULT_PUBLIC_URL}
   sessionSecret: ${env.PACKVAULT_SESSION_SECRET}
   maxUploadBytes: ${env.PACKVAULT_MAX_UPLOAD_BYTES}
@@ -52,3 +53,13 @@ server:
 logging:
   level: ${env.PACKVAULT_LOG_LEVEL}
   format: ${env.PACKVAULT_LOG_FORMAT}
+
+database:
+  url: ${env.PACKVAULT_DATABASE_URL}
+
+secrets:
+  encryptAtRest: false
+  encryptionKey:
+    provider: environment
+    environment:
+      variable: PACKVAULT_SECRETS_ENCRYPTION_KEY

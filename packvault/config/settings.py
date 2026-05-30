@@ -75,7 +75,7 @@ class TokenPermission(BaseModel):
 
 class TokenConfig(BaseModel):
     name: str = Field(pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$")
-    token_hash: str = Field(min_length=1)
+    token_hash: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
     expires_at: datetime | None = None
     permissions: list[TokenPermission] = Field(default_factory=list)
 
@@ -113,15 +113,60 @@ class SecurityConfig(BaseModel):
 class ServerConfig(BaseModel):
     host: str = "0.0.0.0"
     port: int = Field(default=8080, ge=1, le=65535)
-    public_url: str = "http://localhost:8080"
+    public_url: str | None = None
     session_secret: str = Field(min_length=1)
     max_upload_bytes: int = Field(default=524_288_000, gt=0)
     request_timeout_seconds: int = Field(default=300, gt=0)
+    ping_rate_limit_per_minute: int = Field(
+        default=10,
+        ge=1,
+        le=10_000,
+        description="Combined /ping requests allowed per minute across all clients",
+    )
+    operations_port: int = Field(default=9090, ge=1, le=65535)
+
+    @model_validator(mode="after")
+    def set_default_public_url(self):
+        if not self.public_url:
+            self.public_url = f"http://localhost:{self.port}"
+        return self
 
 
 class LoggingConfig(BaseModel):
     level: str = "INFO"
     format: LogFormat = "json"
+
+
+EncryptionKeyProvider = Literal["environment", "aws_secrets_manager"]
+
+
+class EnvironmentKeyConfig(BaseModel):
+    variable: str = "PACKVAULT_SECRETS_ENCRYPTION_KEY"
+
+
+class AwsSecretsManagerKeyConfig(BaseModel):
+    secret_id: str = ""
+    region: str = "us-east-1"
+    endpoint_url: str = ""
+    version_id: str = ""
+    version_stage: str = ""
+
+
+class EncryptionKeyConfig(BaseModel):
+    provider: EncryptionKeyProvider = "environment"
+    environment: EnvironmentKeyConfig = Field(default_factory=EnvironmentKeyConfig)
+    aws_secrets_manager: AwsSecretsManagerKeyConfig = Field(
+        default_factory=AwsSecretsManagerKeyConfig
+    )
+
+
+class SecretsConfig(BaseModel):
+    encrypt_at_rest: bool = False
+    encryption_key: EncryptionKeyConfig = Field(default_factory=EncryptionKeyConfig)
+
+
+class DatabaseConfig(BaseModel):
+    url: str = ""
 
 
 class Settings(BaseSettings):
@@ -142,8 +187,14 @@ class Settings(BaseSettings):
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    database: DatabaseConfig = Field(default_factory=DatabaseConfig)
+    secrets: SecretsConfig = Field(default_factory=SecretsConfig)
 
     config_path: Path | None = None
+
+    @property
+    def database_enabled(self) -> bool:
+        return bool(self.database.url.strip())
 
     @model_validator(mode="after")
     def validate_repository_references(self) -> Settings:
