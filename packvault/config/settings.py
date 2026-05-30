@@ -75,7 +75,7 @@ class TokenPermission(BaseModel):
 
 class TokenConfig(BaseModel):
     name: str = Field(pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$")
-    token_hash: str = Field(min_length=1)
+    token_hash: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
     expires_at: datetime | None = None
     permissions: list[TokenPermission] = Field(default_factory=list)
 

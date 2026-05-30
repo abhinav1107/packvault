@@ -12,6 +12,8 @@ def test_hash_and_verify() -> None:
     stored = hash_token(raw)
     assert verify_token_hash(raw, stored)
     assert not verify_token_hash("wrong", stored)
+    assert not verify_token_hash(raw, "plaintext-secret")
+    assert not verify_token_hash(raw, "")
 
 
 def test_expired_token() -> None:
