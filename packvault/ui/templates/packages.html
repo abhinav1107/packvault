@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PackVault — Packages</title>
+  {% include "_head_icons.html" %}
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">PV</div>
+        <div>
+          <strong>PackVault</strong>
+          <span>Maven registry</span>
+        </div>
+      </div>
+
+      <nav class="side-nav" aria-label="Primary navigation">
+        <a class="active" href="/packages">Packages</a>
+        <a href="/artifacts">Storage browser</a>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/logout">Logout</a>
+      </nav>
+
+      <section class="side-card">
+        <h2>Signed in</h2>
+        <dl>
+          <dt>User</dt>
+          <dd>{{ user.name or user.subject }}</dd>
+          <dt>Auth Provider</dt>
+          <dd>{{ user.provider }}</dd>
+          <dt>Storage backend</dt>
+          <dd>{{ storage_backend }}</dd>
+        </dl>
+      </section>
+
+      <section class="side-card">
+        <h2>Repositories</h2>
+        {% if repositories %}
+        <ul class="repo-list">
+          {% for repo in repositories %}
+          <li>
+            <span class="repo-name">{{ repo.name }}</span>
+            {% if repo.allow_overwrite %}
+            <span class="badge warn">overwrite allowed</span>
+            {% else %}
+            <span class="badge safe">overwrite disabled</span>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="muted">No repositories configured.</p>
+        {% endif %}
+      </section>
+    </aside>
+
+    <section class="content">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">Maven artifacts</p>
+          <h1>Packages</h1>
+          <p>Browse Maven packages by group, artifact, and version.</p>
+        </div>
+      </header>
+
+      <form method="get" action="/packages" class="package-toolbar">
+        <label class="search-field">
+          <span>Search packages</span>
+          <input
+            type="search"
+            name="q"
+            value="{{ query }}"
+            placeholder="Search com.example, simple-library, or 0.1.0"
+            autocomplete="off"
+          >
+        </label>
+
+        <label>
+          <span>Repository</span>
+          <select name="repository">
+            {% for repo in repositories %}
+            <option value="{{ repo.name }}"{% if repo.name == repository %} selected{% endif %}>{{ repo.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <label>
+          <span>Sort</span>
+          <select name="sort">
+            <option value="name"{% if sort == "name" %} selected{% endif %}>Name</option>
+            <option value="versions"{% if sort == "versions" %} selected{% endif %}>Version count</option>
+          </select>
+        </label>
+
+        <button type="submit">Apply</button>
+      </form>
+
+      <section class="card package-card">
+        <div class="table-header">
+          <div>
+            <h2>Package index</h2>
+            {% if repository %}
+            <p>{{ packages|length }} package(s) in <code>{{ repository }}</code></p>
+            {% else %}
+            <p>No repository selected.</p>
+            {% endif %}
+          </div>
+        </div>
+
+        {% if packages %}
+        <table class="packages-table">
+          <thead>
+            <tr>
+              <th>Package</th>
+              <th>Latest</th>
+              <th>Versions</th>
+              <th>Repository</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for package in packages %}
+            <tr>
+              <td>
+                <a
+                  class="package-name"
+                  href="/artifacts?repository={{ package.repository }}&amp;prefix={{ package.artifact_path }}"
+                >{{ package.package_name }}</a>
+                <div class="muted">{{ package.artifact_path }}</div>
+              </td>
+              <td><span class="version-pill">{{ package.latest_version }}</span></td>
+              <td>{{ package.version_count }}</td>
+              <td><span class="repo-chip">{{ package.repository }}</span></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">
+          <h2>No packages found</h2>
+          {% if query %}
+          <p>No package matched <code>{{ query }}</code>. Try a group ID, artifact ID, or version.</p>
+          {% else %}
+          <p>Publish a Maven artifact to this repository, then come back here.</p>
+          {% endif %}
+        </div>
+        {% endif %}
+      </section>
+    </section>
+  </main>
+</body>
+</html>
