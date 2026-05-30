@@ -7,7 +7,7 @@ This document is the **single source of truth** for the current development batc
 | Field | Value |
 |-------|-------|
 | Approved | No |
-| Last todo completed | §7.1 docs/operations.md |
+| Last todo completed | §7.2 docs/configuration.md |
 | Last updated | 2026-05-30 |
 
 ---
@@ -78,7 +78,7 @@ Work **top to bottom**. One todo (or one numbered sub-item) per conversation is 
 ### 7. Documentation
 
 - [x] 7.1 `docs/operations.md` — setup flow, metrics port, bootstrap admin recovery, encryption
-- [ ] 7.2 `docs/configuration.md` — new config sections and env vars
+- [x] 7.2 `docs/configuration.md` — new config sections and env vars
 
 ---
 
