@@ -90,7 +90,7 @@ database:
   url: ${env.PACKVAULT_DATABASE_URL}
 ```
 
-Schema is applied only during [one-time setup](operations.md#database-and-one-time-setup), not on every application start.
+Schema is applied only during [one-time setup](operations.md#database-and-one-time-setup), not on every application start. For upgrades after initialization, see [Upgrading PackVault](operations.md#upgrading-packvault).
 
 ### `secrets`
 

@@ -179,9 +179,20 @@ To use local disk instead of S3, set `PACKVAULT_CONFIG=/config/dev.yaml` in `.en
    - **Username**: value of `PACKVAULT_LOCAL_ADMIN_USERNAME` (default `admin`)
    - **Password**: the **plain** password you hashed (e.g. `admin`), not the hash string
 
-The dashboard lists repositories and shows copy-paste Maven/Gradle snippets.
+After login, the bootstrap admin is redirected to `/setup` until the database is initialized (see next step). Maven tokens from config work before setup; PostgreSQL metadata is not seeded until you complete it.
 
-### Step 6 — Publish and download a test file
+### Step 6 — Initialize PackVault (one-time)
+
+Docker Compose enables PostgreSQL by default (`PACKVAULT_DATABASE_URL` in `.env`). PackVault does **not** create schema or seed data on ordinary startup — you run setup once as the bootstrap admin:
+
+1. On `/setup`, confirm PostgreSQL is reachable and encryption settings look correct.
+2. Click **Initialize PackVault**.
+
+This runs Alembic migrations, records initialization state, seeds default groups, and imports Maven token hashes from your config into PostgreSQL. Details: [docs/operations.md — Database and one-time setup](docs/operations.md#database-and-one-time-setup).
+
+After success you are redirected to the dashboard, which lists repositories and copy-paste Maven/Gradle snippets.
+
+### Step 7 — Publish and download a test file
 
 ```bash
 # Upload (replace token secret with the raw CI token you chose)
@@ -258,6 +269,8 @@ You should see log lines including the version, for example:
 - `PackVault 0.1.0 starting`
 - `PackVault 0.1.0 startup complete (storage=local, listen=0.0.0.0:8080)`
 
+If `PACKVAULT_DATABASE_URL` is set (required by `config/dev.yaml` and `config/dev-localstack.yaml`), ensure PostgreSQL is running, then complete the one-time setup wizard at `/setup` after signing in as the bootstrap admin. See [docs/operations.md — Database and one-time setup](docs/operations.md#database-and-one-time-setup).
+
 ### Step 4 — Verify health
 
 ```bash
@@ -276,6 +289,7 @@ All should return HTTP 200 when the server is healthy.
 |----------------------|---------------------------------------------------------------------|
 | `/`                  | Landing; redirects to dashboard if logged in                        |
 | `/login`             | Local username/password form                                        |
+| `/setup`             | One-time database initialization (bootstrap admin only)             |
 | `/auth/google/login` | Google SSO (only if `google` is in `auth.providers` and configured) |
 | `/dashboard`         | Repositories, auth method, Maven/Gradle snippets                    |
 | `/logout`            | Clears session cookie                                               |
@@ -692,6 +706,12 @@ GitHub Actions (`.github/workflows/ci.yaml`) runs Ruff, pytest, Python package b
 - Use the **plain** admin password, not the argon2 hash string.
 - Confirm `local` is listed under `auth.providers`.
 
+### Redirected to `/setup` after login
+
+- Expected on first run when `database.url` is configured and PackVault is not initialized yet.
+- Sign in as the bootstrap admin (`PACKVAULT_LOCAL_ADMIN_USERNAME`) and click **Initialize PackVault** once.
+- Do not use `/setup` for version upgrades — see [Upgrading PackVault](docs/operations.md#upgrading-packvault) in the operations guide.
+
 ---
 
 ## Further documentation
@@ -700,7 +720,7 @@ GitHub Actions (`.github/workflows/ci.yaml`) runs Ruff, pytest, Python package b
 |--------------------------------------------------------|----------------------------------------|
 | [docs/configuration.md](docs/configuration.md)         | URLs, `${env.*}`, logging, client auth |
 | [docs/security.md](docs/security.md)                   | Defaults, immutability, audit          |
-| [docs/operations.md](docs/operations.md)               | Health probes, metrics                 |
+| [docs/operations.md](docs/operations.md)               | Setup, upgrades, health probes, metrics |
 | [docs/publishing-gradle.md](docs/publishing-gradle.md) | Gradle publishing example              |
 | [env.example](env.example)                             | All environment variables explained    |
 

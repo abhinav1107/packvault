@@ -1,6 +1,6 @@
 # Operations
 
-Operator-focused notes for running PackVault day to day: local Compose, database setup, health and metrics, encryption, and recovery.
+Operator-focused notes for running PackVault day to day: local Compose, database setup, upgrades, health and metrics, encryption, and recovery.
 
 ## Local Docker Compose workflow
 
@@ -126,6 +126,64 @@ On boot, PackVault **never** runs DDL or seeds data automatically.
 | Not initialized | App serves normally; env auth and config tokens work; setup available to bootstrap admin. |
 | Initialized, DB unreachable or schema missing | Process fails fast with a clear ops error. |
 | Initialized, encryption enabled, key fingerprint mismatch | Fail fast — verify `PACKVAULT_SECRETS_ENCRYPTION_KEY` or the configured AWS Secrets Manager secret. |
+
+## Upgrading PackVault
+
+PackVault separates **first-time initialization** from **schema upgrades**:
+
+| Action | When | How |
+|--------|------|-----|
+| First-time bootstrap | Empty database, not yet initialized | UI at `/setup` or `POST /admin/setup/initialize` (bootstrap admin) |
+| Schema upgrade | Database already initialized; new PackVault release includes Alembic revisions | Run migrations manually (below) |
+
+Ordinary application startup does **not** run `alembic upgrade`. After initialization, deploying a newer image does not apply new migrations automatically.
+
+### Before you upgrade
+
+1. Read the release notes for database or config changes.
+2. Back up PostgreSQL.
+3. Prefer upgrading with a single PackVault instance (or one replica) applying migrations before scaling out.
+
+### Run migrations on an initialized database
+
+Use the same Alembic entry point as the setup wizard (`upgrade head`). The database URL must match `PACKVAULT_DATABASE_URL` / `database.url`.
+
+**Docker Compose** (from the project root, PackVault container running):
+
+```bash
+docker compose exec packvault python -c \
+  'from packvault.setup.service import run_migrations; import os; run_migrations(os.environ["PACKVAULT_DATABASE_URL"])'
+```
+
+**From source** (repository root, venv active, URL exported):
+
+```bash
+export PACKVAULT_DATABASE_URL='postgresql+asyncpg://user:pass@localhost:5432/packvault'
+python -c 'from packvault.setup.service import run_migrations; import os; run_migrations(os.environ["PACKVAULT_DATABASE_URL"])'
+```
+
+**Kubernetes** (adjust namespace, pod name, and secret-backed env as needed):
+
+```bash
+kubectl exec -it deploy/packvault -- python -c \
+  'from packvault.setup.service import run_migrations; import os; run_migrations(os.environ["PACKVAULT_DATABASE_URL"])'
+```
+
+The application image includes `alembic.ini` and `alembic/` at `/app` (`PACKVAULT_APP_ROOT` defaults there in containers).
+
+### After migrations
+
+1. Roll out the new PackVault version (or restart remaining replicas).
+2. Confirm `/startupz`, `/livez`, and `/readyz` on the operations port.
+3. Smoke-test Maven read/write with a scoped token.
+
+### What not to do
+
+- Do **not** call `POST /admin/setup/initialize` again on an initialized system — it returns **409 Conflict**.
+- Do **not** expect `/setup` to apply future schema changes; it is for the one-time bootstrap only.
+- Do **not** run migrations against a production database without a backup and a maintenance window when revisions are non-trivial.
+
+When a release has no new files under `alembic/versions/`, the commands above are a no-op at `head` and are still safe to run.
 
 ## Bootstrap platform admin recovery
 
