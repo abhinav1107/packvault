@@ -192,6 +192,7 @@ securityContext:
 service:
   type: ClusterIP
   port: 8080
+  opsPort: 9090
   annotations: {}
 
 # This block is for setting up ingress.
@@ -229,6 +230,7 @@ resources: {}
 
 # This is to set up startup, liveness, and readiness probes.
 probes:
+  port: ops
   startup:
     enabled: true
     path: /startupz

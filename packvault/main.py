@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -15,14 +16,24 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from packvault.__version__ import __version__
 from packvault.api.routes_auth import router as auth_router
-from packvault.api.routes_health import router as health_router
 from packvault.api.routes_maven import router as maven_router
+from packvault.api.routes_operations import router as operations_router
+from packvault.api.routes_ping import router as ping_router
 from packvault.api.routes_ui import router as ui_router
 from packvault.auth.google import create_google_oauth
 from packvault.auth.sessions import SessionManager
 from packvault.auth.tokens import TokenRegistry
 from packvault.config.settings import Settings, load_settings
-from packvault.observability.logging import resolve_logging_options, setup_logging
+from packvault.observability.logging import (
+    build_uvicorn_log_config,
+    resolve_logging_options,
+    setup_logging,
+)
+from packvault.observability.port_routing import (
+    AppAccessLogMiddleware,
+    OperationsAccessLogMiddleware,
+    PortRestrictionMiddleware,
+)
 from packvault.repositories.registry import build_registry
 from packvault.runtime import AppState
 from packvault.security.headers import SecurityHeadersMiddleware
@@ -69,11 +80,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app_state.startup_complete = True
 
         logger.info(
-            "PackVault %s startup complete (storage=%s, listen=%s:%s)",
+            "PackVault %s startup complete (storage=%s, app=%s:%s, operations=%s:%s)",
             __version__,
             cfg.storage.backend,
             cfg.server.host,
             cfg.server.port,
+            cfg.server.host,
+            cfg.server.operations_port,
         )
 
         yield
@@ -83,6 +96,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(title="PackVault", version=__version__, lifespan=lifespan)
 
+    app.add_middleware(
+        PortRestrictionMiddleware,
+        main_port=cfg.server.port,
+        operations_port=cfg.server.operations_port,
+    )
+    app.add_middleware(
+        AppAccessLogMiddleware,
+        main_port=cfg.server.port,
+    )
+    app.add_middleware(
+        OperationsAccessLogMiddleware,
+        operations_port=cfg.server.operations_port,
+    )
     app.add_middleware(
         SessionMiddleware,
         secret_key=cfg.server.session_secret,
@@ -109,7 +135,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     static_dir = Path(__file__).parent / "ui" / "static"
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
-    app.include_router(health_router)
+    app.include_router(ping_router)
+    app.include_router(operations_router)
     app.include_router(ui_router)
     app.include_router(auth_router)
     app.include_router(maven_router)
@@ -137,6 +164,42 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
+async def _serve(app: FastAPI, settings: Settings, log_level: str, log_config: dict) -> None:
+    host = settings.server.host
+    main_config = uvicorn.Config(
+        app,
+        host=host,
+        port=settings.server.port,
+        log_level=log_level,
+        log_config=log_config,
+        lifespan="off",
+        access_log=False,
+    )
+    ops_config = uvicorn.Config(
+        app,
+        host=host,
+        port=settings.server.operations_port,
+        log_level=log_level,
+        log_config=log_config,
+        lifespan="off",
+        access_log=False,
+    )
+
+    logger.info(
+        "PackVault listening on %s:%s (app) and %s:%s (operations)",
+        host,
+        settings.server.port,
+        host,
+        settings.server.operations_port,
+    )
+
+    async with app.router.lifespan_context(app):
+        await asyncio.gather(
+            uvicorn.Server(main_config).serve(),
+            uvicorn.Server(ops_config).serve(),
+        )
+
+
 def main() -> None:
     parser = _build_arg_parser()
     args, _unknown = parser.parse_known_args()
@@ -151,16 +214,13 @@ def main() -> None:
     )
 
     setup_logging(log_opts)
+    log_config = build_uvicorn_log_config(log_opts)
     logger.info("PackVault %s starting", __version__)
 
     app = create_app(settings)
+    log_level = log_opts.level_name.lower()
 
-    uvicorn.run(
-        app,
-        host=settings.server.host,
-        port=settings.server.port,
-        log_level=log_opts.level_name.lower(),
-    )
+    asyncio.run(_serve(app, settings, log_level, log_config))
 
 
 if __name__ == "__main__":

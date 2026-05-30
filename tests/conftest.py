@@ -16,6 +16,7 @@ from packvault.main import create_app
 from packvault.repositories.registry import build_registry
 from packvault.runtime import AppState
 from packvault.storage.factory import create_artifact_store
+from tests.asgi_helpers import asgi_with_local_port
 
 
 @pytest.fixture
@@ -71,7 +72,7 @@ def test_settings(temp_storage: Path) -> Settings:
 @pytest.fixture
 async def client(test_settings: Settings) -> Generator[AsyncClient]:
     app = create_app(test_settings)
-    app.state.app_state = AppState(
+    app_state = AppState(
         settings=test_settings,
         store=create_artifact_store(test_settings),
         repositories=build_registry(test_settings),
@@ -80,6 +81,9 @@ async def client(test_settings: Settings) -> Generator[AsyncClient]:
         google_oauth=create_google_oauth(test_settings),
         startup_complete=True,
     )
-    transport = ASGITransport(app=app)
+    app.state.app_state = app_state
+    transport = ASGITransport(
+        app=asgi_with_local_port(app, test_settings.server.port)
+    )
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac

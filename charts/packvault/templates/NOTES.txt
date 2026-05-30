@@ -52,11 +52,15 @@ Examples:
   Snapshots: http://localhost:8080/snapshots
 {{- end }}
 
-Health checks:
-  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "packvault.fullname" . }} 8080:{{ .Values.service.port }}
-  curl -i http://localhost:8080/livez
-  curl -i http://localhost:8080/startupz
-  curl -i http://localhost:8080/readyz
+Health checks (operations port {{ .Values.service.opsPort }}):
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "packvault.fullname" . }} {{ .Values.service.opsPort }}:{{ .Values.service.opsPort }}
+  curl -i http://localhost:{{ .Values.service.opsPort }}/livez
+  curl -i http://localhost:{{ .Values.service.opsPort }}/startupz
+  curl -i http://localhost:{{ .Values.service.opsPort }}/readyz
+  curl -i http://localhost:{{ .Values.service.opsPort }}/metrics
+
+Public reachability check (main port {{ .Values.service.port }}):
+  curl -i http://localhost:{{ .Values.service.port }}/ping
 
 Important:
   Secret-like values in the generated ConfigMap are expected to use ${env.NAME} placeholders.

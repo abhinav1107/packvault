@@ -113,10 +113,23 @@ class SecurityConfig(BaseModel):
 class ServerConfig(BaseModel):
     host: str = "0.0.0.0"
     port: int = Field(default=8080, ge=1, le=65535)
-    public_url: str = "http://localhost:8080"
+    public_url: str | None = None
     session_secret: str = Field(min_length=1)
     max_upload_bytes: int = Field(default=524_288_000, gt=0)
     request_timeout_seconds: int = Field(default=300, gt=0)
+    ping_rate_limit_per_minute: int = Field(
+        default=10,
+        ge=1,
+        le=10_000,
+        description="Combined /ping requests allowed per minute across all clients",
+    )
+    operations_port: int = Field(default=9090, ge=1, le=65535)
+
+    @model_validator(mode="after")
+    def set_default_public_url(self):
+        if not self.public_url:
+            self.public_url = f"http://localhost:{self.port}"
+        return self
 
 
 class LoggingConfig(BaseModel):

@@ -7,6 +7,7 @@ services:
     container_name: packvault
     ports:
       - "${PACKVAULT_HOST_PORT:-8080}:8080"
+      - "${PACKVAULT_OPS_PORT:-9090}:9090"
     environment:
       PACKVAULT_CONFIG: ${PACKVAULT_CONFIG_CONTAINER:-/config/config.yaml}
 
