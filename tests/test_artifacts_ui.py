@@ -256,7 +256,7 @@ async def test_artifacts_delete_artifact_removes_all_versions(
 @pytest.mark.asyncio
 async def test_dashboard_nav_includes_artifacts(client: AsyncClient) -> None:
     await _login(client)
-    response = await client.get("/dashboard")
+    response = await client.get("/packages")
     assert response.status_code == 200
     assert 'href="/artifacts"' in response.text
-    assert 'href="/dashboard"' in response.text
+    assert 'href="/packages"' in response.text
