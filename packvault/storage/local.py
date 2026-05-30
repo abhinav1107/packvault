@@ -124,14 +124,17 @@ class LocalArtifactStore(ArtifactStore):
         *,
         max_keys: int = 100,
         continuation_token: str | None = None,
+        start_after: str | None = None,
     ) -> ListPrefixResult:
         base = self._resolve(prefix)
 
         if not base.exists():
             return ListPrefixResult(keys=[])
 
+        resume_after = continuation_token if continuation_token is not None else start_after
+
         if base.is_file():
-            if continuation_token is not None:
+            if resume_after is not None:
                 return ListPrefixResult(keys=[])
             return ListPrefixResult(keys=[prefix])
 
@@ -143,8 +146,8 @@ class LocalArtifactStore(ArtifactStore):
 
         keys.sort()
 
-        if continuation_token is not None:
-            keys = [key for key in keys if key > continuation_token]
+        if resume_after is not None:
+            keys = [key for key in keys if key > resume_after]
 
         page = keys[:max_keys]
         next_token = page[-1] if len(keys) > max_keys else None

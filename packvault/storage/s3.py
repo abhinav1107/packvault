@@ -182,6 +182,7 @@ class S3ArtifactStore(ArtifactStore):
         *,
         max_keys: int = 100,
         continuation_token: str | None = None,
+        start_after: str | None = None,
     ) -> ListPrefixResult:
         full_prefix = self._full_key(prefix)
         list_kwargs: dict = {
@@ -192,6 +193,8 @@ class S3ArtifactStore(ArtifactStore):
 
         if continuation_token:
             list_kwargs["ContinuationToken"] = continuation_token
+        elif start_after:
+            list_kwargs["StartAfter"] = self._full_key(start_after)
 
         async with self._session.client("s3", **self._client_kwargs()) as client:
             try:

@@ -58,6 +58,7 @@ class ArtifactStore(ABC):
         *,
         max_keys: int = 100,
         continuation_token: str | None = None,
+        start_after: str | None = None,
     ) -> ListPrefixResult:
         """List object keys under a prefix with pagination."""
 

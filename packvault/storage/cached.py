@@ -139,11 +139,13 @@ class CachedArtifactStore(ArtifactStore):
         *,
         max_keys: int = 100,
         continuation_token: str | None = None,
+        start_after: str | None = None,
     ) -> ListPrefixResult:
         return await self._primary.list_prefix(
             prefix,
             max_keys=max_keys,
             continuation_token=continuation_token,
+            start_after=start_after,
         )
 
     async def delete(self, key: str) -> None:

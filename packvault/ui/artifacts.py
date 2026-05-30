@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import json
 from dataclasses import dataclass
 
 from packvault.maven.checksums import is_checksum_path
@@ -57,6 +59,41 @@ def artifact_path_from_key(key: str, repository: str) -> str:
     return key[len(prefix) :]
 
 
+def encode_ui_list_cursor(
+    *,
+    storage_token: str | None,
+    start_after: str | None,
+) -> str:
+    payload = {"s": storage_token, "a": start_after}
+    raw = json.dumps(payload, separators=(",", ":")).encode()
+    return base64.urlsafe_b64encode(raw).decode()
+
+
+def decode_ui_list_cursor(cursor: str) -> tuple[str | None, str | None]:
+    """Decode a UI list cursor into storage pagination parameters.
+
+    Legacy cursors were bare object keys (local-only). They are treated as
+    ``start_after`` so existing local bookmarks keep working.
+    """
+    try:
+        payload = json.loads(base64.urlsafe_b64decode(cursor.encode()))
+    except (json.JSONDecodeError, ValueError, UnicodeDecodeError):
+        return None, cursor
+
+    if not isinstance(payload, dict):
+        return None, cursor
+
+    storage_token = payload.get("s")
+    start_after = payload.get("a")
+
+    if storage_token is not None and not isinstance(storage_token, str):
+        raise BadRequestError("Invalid list cursor")
+    if start_after is not None and not isinstance(start_after, str):
+        raise BadRequestError("Invalid list cursor")
+
+    return storage_token, start_after
+
+
 async def list_artifacts_for_ui(
     store: ArtifactStore,
     *,
@@ -68,21 +105,26 @@ async def list_artifacts_for_ui(
 ) -> ArtifactListResult:
     storage_prefix = build_list_prefix(repository, path_prefix)
     items: list[ArtifactListItem] = []
-    token = continuation_token
-    next_cursor: str | None = None
-    has_more = False
+    storage_token, start_after = (
+        decode_ui_list_cursor(continuation_token)
+        if continuation_token
+        else (None, None)
+    )
 
     for _ in range(_MAX_STORAGE_PAGES):
         page = await store.list_prefix(
             storage_prefix,
             max_keys=_STORAGE_FETCH_SIZE,
-            continuation_token=token,
+            continuation_token=storage_token,
+            start_after=start_after,
         )
+        storage_token = None
+        start_after = None
 
         if not page.keys:
             break
 
-        for key in page.keys:
+        for index, key in enumerate(page.keys):
             path = artifact_path_from_key(key, repository)
             if not show_all and is_hidden_artifact_path(path):
                 continue
@@ -95,15 +137,25 @@ async def list_artifacts_for_ui(
                 )
             )
             if len(items) >= page_size:
-                next_cursor = key
-                has_more = (
-                    key != page.keys[-1]
-                    or page.continuation_token is not None
-                )
+                remaining_in_page = index < len(page.keys) - 1
+                if remaining_in_page:
+                    next_cursor = encode_ui_list_cursor(
+                        storage_token=None,
+                        start_after=key,
+                    )
+                elif page.continuation_token:
+                    next_cursor = encode_ui_list_cursor(
+                        storage_token=page.continuation_token,
+                        start_after=None,
+                    )
+                else:
+                    next_cursor = None
+
+                has_more = remaining_in_page or page.continuation_token is not None
                 return ArtifactListResult(items, next_cursor, has_more)
 
-        token = page.continuation_token
-        if token is None:
+        storage_token = page.continuation_token
+        if storage_token is None:
             break
 
     return ArtifactListResult(items, None, False)
