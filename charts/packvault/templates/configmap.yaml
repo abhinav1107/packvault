@@ -77,11 +77,34 @@ data:
     server:
       host: "0.0.0.0"
       port: {{ .Values.service.port }}
+      operationsPort: {{ .Values.service.opsPort }}
       publicUrl: {{ .Values.config.server.publicUrl | quote }}
       sessionSecret: {{ .Values.config.server.sessionSecret | quote }}
       maxUploadBytes: {{ .Values.config.server.maxUploadBytes | int }}
       requestTimeoutSeconds: {{ .Values.config.server.requestTimeoutSeconds }}
+      pingRateLimitPerMinute: {{ .Values.config.server.pingRateLimitPerMinute }}
 
     logging:
       level: {{ .Values.config.logging.level | quote }}
       format: {{ .Values.config.logging.format | quote }}
+
+    database:
+      url: {{ .Values.config.databaseUrl | quote }}
+
+    secrets:
+      encryptAtRest: {{ .Values.config.secrets.encryptAtRest }}
+      encryptionKey:
+        provider: {{ .Values.config.secrets.encryptionKey.provider | quote }}
+        {{- if eq .Values.config.secrets.encryptionKey.provider "environment" }}
+        environment:
+          variable: {{ .Values.config.secrets.encryptionKey.environment.variable | quote }}
+        {{- else if eq .Values.config.secrets.encryptionKey.provider "aws_secrets_manager" }}
+        awsSecretsManager:
+          secretId: {{ .Values.config.secrets.encryptionKey.awsSecretsManager.secretId | quote }}
+          region: {{ .Values.config.secrets.encryptionKey.awsSecretsManager.region | quote }}
+          {{- with .Values.config.secrets.encryptionKey.awsSecretsManager.endpointUrl }}
+          endpointUrl: {{ . | quote }}
+          {{- end }}
+        {{- else }}
+        {{- fail "config.secrets.encryptionKey.provider must be either environment or aws_secrets_manager" }}
+        {{- end }}

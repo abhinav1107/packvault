@@ -32,6 +32,7 @@ imagePullSecrets: []
 # This is to override the chart name.
 nameOverride: ""
 fullnameOverride: ""
+revisionHistoryLimit: 5
 
 # PackVault application configuration.
 # This block is rendered into the PackVault config file mounted at /config/config.yaml.
@@ -119,10 +120,27 @@ config:
     sessionSecret: ${env.PACKVAULT_SESSION_SECRET}
     maxUploadBytes: 524288000
     requestTimeoutSeconds: 300
+    pingRateLimitPerMinute: 10
 
   logging:
     level: INFO
     format: json
+
+  # PostgreSQL connection URL.
+  databaseUrl: ${env.PACKVAULT_DATABASE_URL}
+
+  # Optional encryption of secret fields stored in PostgreSQL.
+  secrets:
+    encryptAtRest: false
+    encryptionKey:
+      # Supported values: environment, aws_secrets_manager
+      provider: environment
+      environment:
+        variable: PACKVAULT_SECRETS_ENCRYPTION_KEY
+      awsSecretsManager:
+        secretId: ""
+        region: us-east-1
+        endpointUrl: ""
 
 # Additional environment variables to add to the PackVault container.
 # Useful for cloud credentials, Pod Identity integrations, or external secret injection.
@@ -144,6 +162,22 @@ extraEnv: []
 #       secretKeyRef:
 #         name: packvault-secrets
 #         key: ci-token-hash
+#   - name: PACKVAULT_DATABASE_URL
+#     valueFrom:
+#       secretKeyRef:
+#         name: packvault-secrets
+#         key: database-url
+#   - name: PACKVAULT_SECRETS_ENCRYPTION_KEY
+#     valueFrom:
+#       secretKeyRef:
+#         name: packvault-secrets
+#         key: secrets-encryption-key
+#   - name: PACKVAULT_SECRETS_MANAGER_SECRET_ID
+#     value: packvault/prod/encryption-key
+#   - name: PACKVAULT_AWS_REGION
+#     value: us-east-1
+#   - name: PACKVAULT_AWS_ENDPOINT_URL
+#     value: ""
 #   - name: AWS_REGION
 #     value: us-east-1
 #   - name: AWS_ACCESS_KEY_ID
