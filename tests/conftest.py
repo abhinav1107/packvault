@@ -83,7 +83,8 @@ async def client(test_settings: Settings) -> Generator[AsyncClient]:
     )
     app.state.app_state = app_state
     transport = ASGITransport(
-        app=asgi_with_local_port(app, test_settings.server.port)
+        app=asgi_with_local_port(app, test_settings.server.port),
+        raise_app_exceptions=False,
     )
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac

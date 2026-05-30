@@ -9,12 +9,18 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from packvault.__version__ import __version__
+from packvault.api.error_handling import (
+    log_request_error,
+    resolve_response_for_http_exception,
+    resolve_response_for_packvault_error,
+    resolve_response_for_unhandled_exception,
+)
 from packvault.api.routes_auth import router as auth_router
 from packvault.api.routes_maven import router as maven_router
 from packvault.api.routes_operations import router as operations_router
@@ -38,8 +44,9 @@ from packvault.repositories.registry import build_registry
 from packvault.runtime import AppState
 from packvault.security.headers import SecurityHeadersMiddleware
 from packvault.storage.factory import create_artifact_store
+from packvault.ui.templates_ctx import templates
 from packvault.utils.errors import PackVaultError
-from packvault.utils.request_id import get_request_id, new_request_id, request_id_var
+from packvault.utils.request_id import new_request_id, request_id_var
 
 logger = logging.getLogger(__name__)
 
@@ -120,17 +127,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(RequestIdMiddleware)
 
     @app.exception_handler(PackVaultError)
-    async def packvault_error_handler(_request: Request, exc: PackVaultError):
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={
-                "error": {
-                    "code": exc.code,
-                    "message": exc.message,
-                },
-                "request_id": get_request_id(),
-            },
-        )
+    async def packvault_error_handler(request: Request, exc: PackVaultError):
+        log_request_error(request, exc)
+        return resolve_response_for_packvault_error(request, exc, templates)
+
+    @app.exception_handler(StarletteHTTPException)
+    async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+        log_request_error(request, exc)
+        return resolve_response_for_http_exception(request, exc, templates)
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(request: Request, exc: Exception):
+        log_request_error(request, exc)
+        return resolve_response_for_unhandled_exception(request, templates)
 
     static_dir = Path(__file__).parent / "ui" / "static"
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")

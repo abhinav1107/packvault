@@ -11,6 +11,15 @@
     <h1>PackVault</h1>
     <p class="tagline">Secure Maven package hosting</p>
 
+    {% if error_message %}
+    <div class="banner error" role="alert">
+      <p>{{ error_message }}</p>
+      {% if reference_id %}
+      <p class="reference">Reference: <code>{{ reference_id }}</code></p>
+      {% endif %}
+    </div>
+    {% endif %}
+
     {% if "local" in providers %}
     <section class="card">
       <h2>Local sign-in</h2>
