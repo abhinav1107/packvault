@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
@@ -45,8 +47,6 @@ def _encryption_context(state: AppState) -> dict:
     context["provider"] = encryption.provider
     if encryption.provider == "environment":
         variable = secrets.encryption_key.environment.variable
-        import os
-
         context["provider_detail"] = variable
         context["key_ready"] = bool(os.environ.get(variable, "").strip())
     elif encryption.provider == "aws_secrets_manager":

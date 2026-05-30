@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
 from packvault.api.deps import get_optional_session, get_state
 from packvault.api.error_handling import UI_FORM_ERROR_MESSAGES
-from packvault.auth.bootstrap import is_bootstrap_admin, post_login_redirect_path
+from packvault.auth.bootstrap import post_login_redirect_path
 from packvault.auth.permissions import SessionUser
 from packvault.runtime import AppState
 from packvault.ui.branding import STATIC_FAVICON_PATH
@@ -13,12 +13,9 @@ from packvault.ui.templates_ctx import templates
 
 router = APIRouter(tags=["ui"])
 
-_FAVICON_PATH = STATIC_FAVICON_PATH
-
-
 @router.get("/favicon.ico", include_in_schema=False)
 async def favicon() -> FileResponse:
-    return FileResponse(_FAVICON_PATH, media_type="image/x-icon")
+    return FileResponse(STATIC_FAVICON_PATH, media_type="image/x-icon")
 
 
 @router.get("/favicon.ico/", include_in_schema=False)
@@ -86,12 +83,13 @@ async def dashboard(
     if user is None:
         return RedirectResponse("/login", status_code=302)
 
-    if (
-        state.settings.database_enabled
-        and is_bootstrap_admin(user, state.settings)
-        and not state.system_initialized
-    ):
-        return RedirectResponse("/setup", status_code=302)
+    redirect_url = post_login_redirect_path(
+        user,
+        state.settings,
+        system_initialized=state.system_initialized,
+    )
+    if redirect_url != "/dashboard":
+        return RedirectResponse(redirect_url, status_code=302)
 
     repositories = [
         {"name": repo.name, "allow_overwrite": repo.allow_overwrite}
