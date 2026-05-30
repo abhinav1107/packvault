@@ -5,6 +5,8 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import BinaryIO
 
+from packvault.utils.errors import NotFoundError
+
 
 @dataclass(frozen=True)
 class ObjectMeta:
@@ -18,6 +20,16 @@ class ObjectMeta:
 class ListPrefixResult:
     keys: list[str]
     continuation_token: str | None = None
+
+
+@dataclass(frozen=True)
+class ListDirectoryResult:
+    """Immediate children under a storage prefix (one directory level)."""
+
+    directories: list[str]
+    files: list[str]
+    continuation_token: str | None = None
+    has_more: bool = False
 
 
 class ArtifactStore(ABC):
@@ -65,3 +77,21 @@ class ArtifactStore(ABC):
     @abstractmethod
     async def delete(self, key: str) -> None:
         """Delete an object. Raises NotFoundError when the object does not exist."""
+
+    @abstractmethod
+    async def list_prefix_level(
+        self,
+        prefix: str,
+        *,
+        max_entries: int = 100,
+        continuation_token: str | None = None,
+    ) -> ListDirectoryResult:
+        """List immediate child directories and files under a prefix."""
+
+    async def delete_many(self, keys: list[str]) -> None:
+        """Delete multiple objects. Missing keys are ignored."""
+        for key in keys:
+            try:
+                await self.delete(key)
+            except NotFoundError:
+                continue

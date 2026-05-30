@@ -18,7 +18,15 @@
 
     {% if deleted %}
     <div class="banner success" role="status">
-      <p>Artifact deleted successfully.</p>
+      {% if delete_scope == 'artifact' %}
+      <p>Deleted {{ deleted_count }} object(s) for this artifact.</p>
+      {% elif delete_scope == 'version' %}
+      <p>Deleted {{ deleted_count }} object(s) for the selected version(s).</p>
+      {% elif delete_scope == 'file' %}
+      <p>Deleted 1 file.</p>
+      {% else %}
+      <p>Deleted {{ deleted_count }} object(s).</p>
+      {% endif %}
     </div>
     {% endif %}
 
@@ -40,42 +48,126 @@
           <input type="checkbox" name="show_all" value="1"{% if show_all %} checked{% endif %}>
           Show checksum sidecars and maven-metadata.xml
         </label>
-        <button type="submit">Search</button>
+        <button type="submit">Browse</button>
       </form>
-      <p class="hint">Lists objects under the selected repository. Hidden by default: <code>.sha1</code>, <code>.md5</code>, <code>.asc</code>, and <code>maven-metadata.xml</code>.</p>
+      <p class="hint">Browse by Maven path. Bulk deletes always remove checksum sidecars and <code>maven-metadata.xml</code> under the target.</p>
     </section>
 
     <section class="card">
-      {% if items %}
+      <nav class="breadcrumbs" aria-label="Artifact path">
+        <a href="{{ artifacts_query(repository=repository, show_all=show_all) }}">{{ repository }}</a>
+        {% for label, crumb_prefix in breadcrumbs %}
+        <span class="sep">›</span>
+        <a href="{{ artifacts_query(repository=repository, prefix=crumb_prefix, show_all=show_all) }}">{{ label }}</a>
+        {% endfor %}
+      </nav>
+
+      {% if can_delete_artifact or can_delete_version %}
+      <div class="bulk-actions">
+        {% if can_delete_version %}
+        <form method="post" action="/artifacts/delete-version" class="delete-form"
+              onsubmit="return confirm('Delete version {{ prefix }} and all files under it (including checksums and metadata)? This cannot be undone.');">
+          <input type="hidden" name="repository" value="{{ repository }}">
+          <input type="hidden" name="prefix" value="{{ prefix }}">
+          {% if show_all %}
+          <input type="hidden" name="show_all" value="1">
+          {% endif %}
+          <button type="submit" class="button danger">Delete this version</button>
+        </form>
+        {% endif %}
+
+        {% if can_delete_artifact %}
+        <form method="post" action="/artifacts/delete-artifact" class="delete-form"
+              onsubmit="return confirm('Delete artifact {{ prefix }} and every version under it? This cannot be undone.');">
+          <input type="hidden" name="repository" value="{{ repository }}">
+          <input type="hidden" name="prefix" value="{{ prefix }}">
+          {% if show_all %}
+          <input type="hidden" name="show_all" value="1">
+          {% endif %}
+          <button type="submit" class="button danger">Delete entire artifact</button>
+        </form>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {% if can_select_versions %}
+      <form method="post" action="/artifacts/delete-versions" id="delete-versions-form"
+            onsubmit="return confirm('Delete the selected versions and all files under them? This cannot be undone.');">
+        <input type="hidden" name="repository" value="{{ repository }}">
+        <input type="hidden" name="prefix" value="{{ prefix }}">
+        {% if show_all %}
+        <input type="hidden" name="show_all" value="1">
+        {% endif %}
+      </form>
+      {% endif %}
+
+      {% if entries %}
       <table class="artifacts-table">
         <thead>
           <tr>
-            <th>Path</th>
+            {% if can_select_versions %}
+            <th class="select-col"></th>
+            {% endif %}
+            <th>Name</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
-          {% for item in items %}
+          {% for entry in entries %}
           <tr>
-            <td><code>{{ item.path }}</code></td>
+            {% if can_select_versions and entry.kind == 'directory' %}
+            <td class="select-col">
+              <input type="checkbox" name="versions" value="{{ entry.name }}" form="delete-versions-form">
+            </td>
+            {% elif can_select_versions %}
+            <td class="select-col"></td>
+            {% endif %}
+            <td>
+              {% if entry.kind == 'directory' %}
+              <a class="dir-link" href="{{ artifacts_query(repository=repository, prefix=entry.path, show_all=show_all) }}">{{ entry.name }}/</a>
+              {% else %}
+              <code>{{ entry.path }}</code>
+              {% endif %}
+            </td>
             <td class="actions">
-              <form method="post" action="/artifacts/delete" class="delete-form"
-                    onsubmit="return confirm('Delete {{ item.path }}? This cannot be undone.');">
-                <input type="hidden" name="repository" value="{{ item.repository }}">
-                <input type="hidden" name="path" value="{{ item.path }}">
+              {% if entry.kind == 'directory' and can_select_versions %}
+              <form method="post" action="/artifacts/delete-version" class="delete-form inline"
+                    onsubmit="return confirm('Delete version {{ entry.name }} and all files under it? This cannot be undone.');">
+                <input type="hidden" name="repository" value="{{ repository }}">
+                <input type="hidden" name="prefix" value="{{ entry.path }}">
+                {% if show_all %}
+                <input type="hidden" name="show_all" value="1">
+                {% endif %}
+                <button type="submit" class="button danger small">Delete version</button>
+              </form>
+              {% elif entry.kind == 'file' %}
+              <form method="post" action="/artifacts/delete" class="delete-form inline"
+                    onsubmit="return confirm('Delete {{ entry.path }}? This cannot be undone.');">
+                <input type="hidden" name="repository" value="{{ repository }}">
+                <input type="hidden" name="path" value="{{ entry.path }}">
                 <input type="hidden" name="prefix" value="{{ prefix }}">
                 {% if show_all %}
                 <input type="hidden" name="show_all" value="1">
                 {% endif %}
-                <button type="submit" class="button danger">Delete</button>
+                <button type="submit" class="button danger small">Delete file</button>
               </form>
+              {% endif %}
             </td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
+
+      {% if can_select_versions %}
+      <div class="bulk-actions version-select-actions">
+        <button type="submit" form="delete-versions-form" class="button danger">Delete selected versions</button>
+      </div>
+      {% endif %}
       {% else %}
-      <p>No artifacts found for this filter.</p>
+      <p>No artifacts found at this path.</p>
+      {% if prefix %}
+      <p><a href="{{ artifacts_query(repository=repository, prefix=parent_prefix, show_all=show_all) }}">Go up</a></p>
+      {% endif %}
       {% endif %}
 
       <div class="pagination">

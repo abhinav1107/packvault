@@ -84,13 +84,21 @@ async def test_artifacts_lists_and_hides_sidecars(storage_client: AsyncClient) -
 
     await _login(storage_client)
 
-    response = await storage_client.get(
+    artifact_page = await storage_client.get(
         "/artifacts?repository=releases&prefix=com/example/app"
     )
-    assert response.status_code == 200
-    assert "com/example/app/1.0/app-1.0.jar</code>" in response.text
-    assert "app-1.0.jar.sha1</code>" not in response.text
-    assert "com/example/app/maven-metadata.xml</code>" not in response.text
+    assert artifact_page.status_code == 200
+    assert "1.0/" in artifact_page.text
+    assert "Delete entire artifact" in artifact_page.text
+    assert "app-1.0.jar.sha1</code>" not in artifact_page.text
+
+    version_page = await storage_client.get(
+        "/artifacts?repository=releases&prefix=com/example/app/1.0"
+    )
+    assert version_page.status_code == 200
+    assert "com/example/app/1.0/app-1.0.jar</code>" in version_page.text
+    assert "Delete this version" in version_page.text
+    assert "app-1.0.jar.sha1</code>" not in version_page.text
 
 
 @pytest.mark.asyncio
@@ -142,6 +150,107 @@ async def test_artifacts_delete_and_audit_log(
     assert extra.get("principal") == "admin"
     assert extra.get("status_code") == 200
     assert extra.get("request_id")
+
+
+@pytest.mark.asyncio
+async def test_artifacts_delete_version_removes_sidecars(
+    storage_client: AsyncClient,
+) -> None:
+    store: LocalArtifactStore = storage_client._store  # type: ignore[attr-defined]
+    version_prefix = "com/example/app/1.0"
+    await store.put(
+        build_storage_key("releases", f"{version_prefix}/app-1.0.jar"),
+        _bytes_iter(b"jar"),
+    )
+    await store.put(
+        build_storage_key("releases", f"{version_prefix}/app-1.0.jar.sha1"),
+        _bytes_iter(b"checksum"),
+    )
+
+    await _login(storage_client)
+
+    delete = await storage_client.post(
+        "/artifacts/delete-version",
+        data={"repository": "releases", "prefix": version_prefix},
+        follow_redirects=False,
+    )
+    assert delete.status_code == 303
+
+    jar_key = build_storage_key("releases", f"{version_prefix}/app-1.0.jar")
+    sha1_key = build_storage_key("releases", f"{version_prefix}/app-1.0.jar.sha1")
+    assert await store.head(jar_key) is None
+    assert await store.head(sha1_key) is None
+
+
+@pytest.mark.asyncio
+async def test_artifacts_delete_versions_multi_select(
+    storage_client: AsyncClient,
+) -> None:
+    store: LocalArtifactStore = storage_client._store  # type: ignore[attr-defined]
+    artifact_prefix = "com/example/pick"
+    for version in ("1.0", "2.0", "3.0"):
+        await store.put(
+            build_storage_key("releases", f"{artifact_prefix}/{version}/lib.jar"),
+            _bytes_iter(b"jar"),
+        )
+
+    await _login(storage_client)
+
+    delete = await storage_client.post(
+        "/artifacts/delete-versions",
+        data={
+            "repository": "releases",
+            "prefix": artifact_prefix,
+            "versions": ["1.0", "3.0"],
+        },
+        follow_redirects=False,
+    )
+    assert delete.status_code == 303
+
+    assert (
+        await store.head(build_storage_key("releases", f"{artifact_prefix}/1.0/lib.jar"))
+        is None
+    )
+    assert (
+        await store.head(build_storage_key("releases", f"{artifact_prefix}/2.0/lib.jar"))
+        is not None
+    )
+    assert (
+        await store.head(build_storage_key("releases", f"{artifact_prefix}/3.0/lib.jar"))
+        is None
+    )
+
+
+@pytest.mark.asyncio
+async def test_artifacts_delete_artifact_removes_all_versions(
+    storage_client: AsyncClient,
+) -> None:
+    store: LocalArtifactStore = storage_client._store  # type: ignore[attr-defined]
+    artifact_prefix = "com/example/multi"
+    for version in ("1.0", "2.0"):
+        await store.put(
+            build_storage_key("releases", f"{artifact_prefix}/{version}/lib.jar"),
+            _bytes_iter(b"jar"),
+        )
+
+    await _login(storage_client)
+
+    delete = await storage_client.post(
+        "/artifacts/delete-artifact",
+        data={"repository": "releases", "prefix": artifact_prefix},
+        follow_redirects=False,
+    )
+    assert delete.status_code == 303
+    location = delete.headers["location"]
+    assert "deleted_count=2" in location or "deleted=1" in location
+
+    for version in ("1.0", "2.0"):
+        assert (
+            await store.head(
+                build_storage_key("releases", f"{artifact_prefix}/{version}/lib.jar")
+            )
+            is None
+        )
 
 
 @pytest.mark.asyncio

@@ -9,7 +9,13 @@ from typing import BinaryIO
 import aiofiles
 import aiofiles.os
 
-from packvault.storage.base import ArtifactStore, ListPrefixResult, ObjectMeta
+from packvault.storage.base import (
+    ArtifactStore,
+    ListDirectoryResult,
+    ListPrefixResult,
+    ObjectMeta,
+)
+from packvault.storage.prefix_listing import merge_directory_page
 from packvault.utils.errors import ConflictError, NotFoundError, ServiceUnavailableError
 
 _CHUNK_SIZE = 64 * 1024
@@ -152,6 +158,60 @@ class LocalArtifactStore(ArtifactStore):
         page = keys[:max_keys]
         next_token = page[-1] if len(keys) > max_keys else None
         return ListPrefixResult(keys=page, continuation_token=next_token)
+
+    async def list_prefix_level(
+        self,
+        prefix: str,
+        *,
+        max_entries: int = 100,
+        continuation_token: str | None = None,
+    ) -> ListDirectoryResult:
+        base = self._resolve(prefix)
+
+        if not base.exists():
+            return ListDirectoryResult([], [], None, False)
+
+        if base.is_file():
+            if continuation_token is not None:
+                return ListDirectoryResult([], [], None, False)
+            return ListDirectoryResult([], [prefix], None, False)
+
+        directories: list[str] = []
+        files: list[str] = []
+
+        try:
+            for child in sorted(base.iterdir(), key=lambda path: path.name):
+                if child.is_dir():
+                    directories.append(child.name)
+                elif child.is_file():
+                    files.append(str(child.relative_to(self._root)))
+        except OSError as exc:
+            raise ServiceUnavailableError(f"Storage error: {exc}") from exc
+
+        page_dirs, page_files, next_cursor, has_more = merge_directory_page(
+            directories,
+            files,
+            max_entries=max_entries,
+            start_after=continuation_token,
+        )
+        return ListDirectoryResult(
+            page_dirs,
+            page_files,
+            next_cursor,
+            has_more,
+        )
+
+    async def delete_many(self, keys: list[str]) -> None:
+        for key in keys:
+            path = self._resolve(key)
+            if not path.is_file():
+                continue
+            try:
+                await aiofiles.os.remove(path)
+            except FileNotFoundError:
+                continue
+            except OSError as exc:
+                raise ServiceUnavailableError(f"Storage error: {exc}") from exc
 
     async def delete(self, key: str) -> None:
         path = self._resolve(key)

@@ -10,7 +10,12 @@ from typing import BinaryIO
 import aiofiles
 import aiofiles.os
 
-from packvault.storage.base import ArtifactStore, ListPrefixResult, ObjectMeta
+from packvault.storage.base import (
+    ArtifactStore,
+    ListDirectoryResult,
+    ListPrefixResult,
+    ObjectMeta,
+)
 from packvault.storage.local import LocalArtifactStore
 from packvault.utils.errors import NotFoundError, ServiceUnavailableError
 
@@ -147,6 +152,29 @@ class CachedArtifactStore(ArtifactStore):
             continuation_token=continuation_token,
             start_after=start_after,
         )
+
+    async def list_prefix_level(
+        self,
+        prefix: str,
+        *,
+        max_entries: int = 100,
+        continuation_token: str | None = None,
+    ) -> ListDirectoryResult:
+        return await self._primary.list_prefix_level(
+            prefix,
+            max_entries=max_entries,
+            continuation_token=continuation_token,
+        )
+
+    async def delete_many(self, keys: list[str]) -> None:
+        await self._primary.delete_many(keys)
+        for key in keys:
+            try:
+                await self._cache.delete(key)
+            except NotFoundError:
+                pass
+            except Exception:
+                pass
 
     async def delete(self, key: str) -> None:
         await self._primary.delete(key)

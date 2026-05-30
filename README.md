@@ -6,7 +6,7 @@
 
 **Secure Maven package hosting over local disk or S3-compatible storage.**
 
-PackVault is a small, security-focused **Maven/Gradle artifact gateway**. It stores and serves JARs, POMs, checksums, and `maven-metadata.xml` using standard Maven HTTP layout. It is **not** a full [Nexus](https://sonatype.github.io/usage/maven/)/[Artifactory](https://jfrog.com/artifactory/) replacement: there is no package browser, Central proxy, vulnerability scanning, or `DELETE` in v1.
+PackVault is a small, security-focused **Maven/Gradle artifact gateway**. It stores and serves JARs, POMs, checksums, and `maven-metadata.xml` using standard Maven HTTP layout. It is **not** a full [Nexus](https://sonatype.github.io/usage/maven/)/[Artifactory](https://jfrog.com/artifactory/) replacement: there is no Central proxy, vulnerability scanning, or Maven HTTP `DELETE` in v1. Operators can browse and delete artifacts in the web UI at `/artifacts`.
 
 ---
 
@@ -52,8 +52,7 @@ PackVault is a small, security-focused **Maven/Gradle artifact gateway**. It sto
 ## What PackVault does not do (v1)
 
 - Proxy or cache Maven Central.
-- Browse or search artifacts in the UI (dashboard shows config snippets only).
-- `DELETE` artifacts via HTTP.
+- Maven HTTP `DELETE` (use the web UI at `/artifacts` for operator deletes).
 - UI-based token management (tokens are config/env only for now).
 - Complex RBAC or per-user Maven permissions beyond token scopes.
 
@@ -292,9 +291,10 @@ All should return HTTP 200 when the server is healthy.
 | `/setup`             | One-time database initialization (bootstrap admin only)             |
 | `/auth/google/login` | Google SSO (only if `google` is in `auth.providers` and configured) |
 | `/dashboard`         | Repositories, auth method, Maven/Gradle snippets                    |
+| `/artifacts`         | Browse and delete artifacts by Maven path (artifact, version, file) |
 | `/logout`            | Clears session cookie                                               |
 
-The UI is for **operators**, not for browsing artifacts. Maven clients do not use the browser login flow.
+The UI is for **operators**. Maven clients do not use the browser login flow; they use HTTP Basic with API tokens.
 
 ---
 

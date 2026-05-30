@@ -325,9 +325,11 @@ packvault_http_request_duration_seconds
 
 ## Artifact management (UI)
 
-Session-authenticated operators can list, search, and delete stored objects at `/artifacts` (linked from the dashboard header). This is separate from the Maven API (no `DELETE` on repository paths). Deletes are confirmed in the UI, emit an audit log line with `request_id`, and require the same session access as the dashboard.
+Session-authenticated operators can browse and delete stored objects at `/artifacts` (linked from the dashboard header). This is separate from the Maven API (no `DELETE` on repository paths). Deletes are confirmed in the UI, emit an audit log line with `request_id`, and require the same session access as the dashboard.
 
-Default listing hides checksum sidecars (`.sha1`, `.md5`, `.asc`) and `maven-metadata.xml`; use **Show all** to include them.
+The browser shows a **hierarchical Maven layout**: repository root → group path → artifact → version → files. From an artifact directory you can delete the entire artifact, delete one or more versions (including checksum sidecars and `maven-metadata.xml` under those paths), or open a version folder to delete individual files. Bulk deletes always remove hidden sidecars under the chosen prefix even when **Show all** is off.
+
+Default listing hides checksum sidecars (`.sha1`, `.md5`, `.asc`) and `maven-metadata.xml`; use **Show all** to include them in the file list.
 
 ## Shutdown
 
