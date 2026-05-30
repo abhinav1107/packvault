@@ -95,7 +95,6 @@ async def artifacts_page(
 
     path_prefix = normalize_search_prefix(prefix_raw)
 
-    known = set(_repository_names(state))
     result = await list_artifacts_for_ui(
         state.store,
         repository=repository,

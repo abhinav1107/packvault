@@ -21,12 +21,12 @@ from packvault.api.error_handling import (
     resolve_response_for_packvault_error,
     resolve_response_for_unhandled_exception,
 )
+from packvault.api.routes_artifacts import router as artifacts_router
 from packvault.api.routes_auth import router as auth_router
 from packvault.api.routes_maven import router as maven_router
 from packvault.api.routes_operations import router as operations_router
 from packvault.api.routes_ping import router as ping_router
 from packvault.api.routes_setup import router as setup_router
-from packvault.api.routes_artifacts import router as artifacts_router
 from packvault.api.routes_ui import router as ui_router
 from packvault.auth.google import create_google_oauth
 from packvault.auth.sessions import SessionManager

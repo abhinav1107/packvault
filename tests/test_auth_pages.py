@@ -77,7 +77,7 @@ async def test_logout_redirects_to_logged_out(client: AsyncClient) -> None:
     )
     assert login.status_code == 303
 
-    logout = await client.get("/logout", cookies=login.cookies, follow_redirects=False)
+    logout = await client.get("/logout", follow_redirects=False)
     assert logout.status_code == 303
     assert logout.headers["location"] == "/logged-out"
     assert logout.cookies.get("packvault_session") in (None, "")

@@ -147,7 +147,7 @@ async def test_setup_initialize_once(postgres_fresh_client: AsyncClient | None) 
     if postgres_fresh_client is None:
         pytest.skip("TEST_DATABASE_URL not set")
 
-    login = await postgres_fresh_client.post(
+    await postgres_fresh_client.post(
         "/login",
         data={"username": "admin", "password": "admin"},
         follow_redirects=False,
@@ -155,7 +155,6 @@ async def test_setup_initialize_once(postgres_fresh_client: AsyncClient | None) 
 
     init = await postgres_fresh_client.post(
         "/admin/setup/initialize",
-        cookies=login.cookies,
         headers={"Accept": "application/json"},
     )
     assert init.status_code == 200
@@ -163,7 +162,6 @@ async def test_setup_initialize_once(postgres_fresh_client: AsyncClient | None) 
 
     repeat = await postgres_fresh_client.post(
         "/admin/setup/initialize",
-        cookies=login.cookies,
         headers={"Accept": "application/json"},
     )
     assert repeat.status_code == 409
@@ -177,7 +175,7 @@ async def test_setup_initialize_from_empty_database(
     if postgres_fresh_client is None:
         pytest.skip("TEST_DATABASE_URL not set")
 
-    login = await postgres_fresh_client.post(
+    await postgres_fresh_client.post(
         "/login",
         data={"username": "admin", "password": "admin"},
         follow_redirects=False,
@@ -185,7 +183,6 @@ async def test_setup_initialize_from_empty_database(
 
     init = await postgres_fresh_client.post(
         "/admin/setup/initialize",
-        cookies=login.cookies,
         follow_redirects=False,
     )
     assert init.status_code == 303
@@ -199,18 +196,17 @@ async def test_setup_page_shows_already_completed_after_initialize(
     if postgres_client is None:
         pytest.skip("TEST_DATABASE_URL not set")
 
-    login = await postgres_client.post(
+    await postgres_client.post(
         "/login",
         data={"username": "admin", "password": "admin"},
         follow_redirects=False,
     )
     await postgres_client.post(
         "/admin/setup/initialize",
-        cookies=login.cookies,
         headers={"Accept": "application/json"},
     )
 
-    setup_page = await postgres_client.get("/setup", cookies=login.cookies)
+    setup_page = await postgres_client.get("/setup")
     assert setup_page.status_code == 200
     assert "already completed" in setup_page.text.lower()
 
@@ -223,14 +219,13 @@ async def test_initialize_imports_token_hashes(
     if postgres_client is None or postgres_settings is None:
         pytest.skip("TEST_DATABASE_URL not set")
 
-    login = await postgres_client.post(
+    await postgres_client.post(
         "/login",
         data={"username": "admin", "password": "admin"},
         follow_redirects=False,
     )
     await postgres_client.post(
         "/admin/setup/initialize",
-        cookies=login.cookies,
         headers={"Accept": "application/json"},
     )
 
