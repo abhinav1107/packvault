@@ -143,7 +143,7 @@ PACKVAULT_LOG_LEVEL=ERROR PACKVAULT_LOG_FORMAT=json packvault
 
 ## Example configuration
 
-See [`config/dev-s3.yaml`](../config/dev-s3.yaml) or [`config/dev.yaml`](../config/dev.yaml) files for references.
+See [`config/dev-localstack.yaml`](../config/dev-localstack.yaml) or [`config/dev.yaml`](../config/dev.yaml) files for references.
 
 # Configuration
 
@@ -169,19 +169,19 @@ The repository includes two development config files:
 
 ```text
 config/dev.yaml
-config/dev-s3.yaml
+config/dev-localstack.yaml
 ```
 
-Use `PACKVAULT_CONFIG_FILE` in `.env` to choose which one Docker Compose mounts:
+Use `PACKVAULT_CONFIG` in `.env` to choose which config file PackVault loads (files live under `./config`, mounted at `/config` in the container):
 
 ```env
-PACKVAULT_CONFIG_FILE=./config/dev.yaml
+PACKVAULT_CONFIG=/config/dev-localstack.yaml
 ```
 
 or:
 
 ```env
-PACKVAULT_CONFIG_FILE=./config/dev-s3.yaml
+PACKVAULT_CONFIG=/config/dev.yaml
 ```
 
 ### Local backend
@@ -221,7 +221,7 @@ S3 backend means:
 - S3-compatible object storage is the source of truth
 - app replicas can be stateless for artifact persistence
 - local cache is optional and disposable
-- MinIO can be used for local testing
+- LocalStack can emulate S3 and Secrets Manager for local testing
 
 ## Environment variable substitution in YAML
 
@@ -283,7 +283,7 @@ The repository should commit:
 ```text
 env.example
 config/dev.yaml
-config/dev-s3.yaml
+config/dev-localstack.yaml
 docker-compose.yaml
 ```
 
@@ -296,7 +296,7 @@ The repository should not commit:
 
 ## Docker Compose defaults
 
-`docker-compose.yaml` provides safe non-secret defaults for paths, ports, logging, MinIO endpoint, cache path, and upload limits.
+`docker-compose.yaml` provides safe non-secret defaults for paths, ports, logging, LocalStack endpoints, cache path, and upload limits.
 
 Secret-like values should come from `.env`, including:
 

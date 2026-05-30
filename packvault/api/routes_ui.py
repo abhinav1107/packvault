@@ -5,6 +5,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
 from packvault.api.deps import get_optional_session, get_state
 from packvault.api.error_handling import UI_FORM_ERROR_MESSAGES
+from packvault.auth.bootstrap import is_bootstrap_admin, post_login_redirect_path
 from packvault.auth.permissions import SessionUser
 from packvault.runtime import AppState
 from packvault.ui.branding import STATIC_FAVICON_PATH
@@ -45,7 +46,12 @@ async def landing(
     state: AppState = Depends(get_state),
 ):
     if user:
-        return RedirectResponse("/dashboard", status_code=302)
+        redirect_url = post_login_redirect_path(
+            user,
+            state.settings,
+            system_initialized=state.system_initialized,
+        )
+        return RedirectResponse(redirect_url, status_code=302)
 
     return templates.TemplateResponse(
         request,
@@ -80,6 +86,13 @@ async def dashboard(
     if user is None:
         return RedirectResponse("/login", status_code=302)
 
+    if (
+        state.settings.database_enabled
+        and is_bootstrap_admin(user, state.settings)
+        and not state.system_initialized
+    ):
+        return RedirectResponse("/setup", status_code=302)
+
     repositories = [
         {"name": repo.name, "allow_overwrite": repo.allow_overwrite}
         for repo in state.settings.repositories
@@ -110,6 +123,8 @@ async def dashboard(
             }
         )
 
+    setup_complete = request.query_params.get("setup") == "complete"
+
     return templates.TemplateResponse(
         request,
         "dashboard.html",
@@ -119,5 +134,6 @@ async def dashboard(
             "snippets": snippets,
             "providers": state.settings.auth.providers,
             "storage_backend": state.settings.storage.backend,
+            "setup_complete": setup_complete,
         },
     )

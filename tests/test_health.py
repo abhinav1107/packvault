@@ -10,10 +10,13 @@ from packvault.auth.passwords import hash_password
 from packvault.auth.sessions import SessionManager
 from packvault.auth.tokens import TokenRegistry
 from packvault.config.settings import AuthConfig, LocalAuthConfig, ServerConfig, Settings
+from packvault.db.engine import create_database_manager
 from packvault.main import create_app
 from packvault.observability.health import check_live, check_ready, check_startup
 from packvault.repositories.registry import build_registry
 from packvault.runtime import AppState
+from packvault.secrets.encryption import EncryptionContext
+from packvault.secrets.protector import SecretProtector
 from packvault.storage.local import LocalArtifactStore
 from tests.asgi_helpers import asgi_with_local_port
 
@@ -32,12 +35,17 @@ def make_test_settings() -> Settings:
 
 
 def _make_app_state(settings: Settings, *, startup_complete: bool) -> AppState:
+    database = create_database_manager(settings.database.url)
+    encryption = EncryptionContext(enabled=False, key=None, fingerprint=None)
     return AppState(
         settings=settings,
         store=LocalArtifactStore(Path(settings.storage.local.root)),
         repositories=build_registry(settings),
         tokens=TokenRegistry.from_config([]),
         sessions=SessionManager(settings.server.session_secret),
+        database=database,
+        encryption=encryption,
+        secret_protector=SecretProtector(encryption),
         startup_complete=startup_complete,
     )
 
@@ -48,12 +56,17 @@ async def test_probe_functions() -> None:
 
     with tempfile.TemporaryDirectory() as tmp:
         store = LocalArtifactStore(Path(tmp))
+        database = create_database_manager(settings.database.url)
+        encryption = EncryptionContext(enabled=False, key=None, fingerprint=None)
         state = AppState(
             settings=settings,
             store=store,
             repositories=build_registry(settings),
             tokens=TokenRegistry.from_config([]),
             sessions=SessionManager(settings.server.session_secret),
+            database=database,
+            encryption=encryption,
+            secret_protector=SecretProtector(encryption),
             startup_complete=False,
         )
 

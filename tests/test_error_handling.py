@@ -6,15 +6,10 @@ from collections.abc import Generator
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from packvault.auth.google import create_google_oauth
-from packvault.auth.sessions import SessionManager
-from packvault.auth.tokens import TokenRegistry
 from packvault.config.settings import Settings
 from packvault.main import create_app
-from packvault.repositories.registry import build_registry
-from packvault.runtime import AppState
-from packvault.storage.factory import create_artifact_store
 from tests.asgi_helpers import asgi_with_local_port
+from tests.conftest import build_test_app_state
 
 
 @pytest.fixture
@@ -22,16 +17,7 @@ async def client_with_boom_route(
     test_settings: Settings,
 ) -> Generator[AsyncClient]:
     app = create_app(test_settings)
-    app_state = AppState(
-        settings=test_settings,
-        store=create_artifact_store(test_settings),
-        repositories=build_registry(test_settings),
-        tokens=TokenRegistry.from_config(test_settings.auth.tokens),
-        sessions=SessionManager(test_settings.server.session_secret),
-        google_oauth=create_google_oauth(test_settings),
-        startup_complete=True,
-    )
-    app.state.app_state = app_state
+    app.state.app_state = build_test_app_state(test_settings)
 
     @app.get("/test-boom")
     async def _boom() -> None:

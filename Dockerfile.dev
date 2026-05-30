@@ -2,7 +2,8 @@ FROM python:3.13-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PACKVAULT_CONFIG=/config/config.yaml
+    PACKVAULT_CONFIG=/config/dev-localstack.yaml \
+    PACKVAULT_APP_ROOT=/app
 
 RUN useradd --create-home --uid 1000 --shell /usr/sbin/nologin packvault \
     && mkdir -p /app /config /data/maven /cache/maven \
@@ -17,6 +18,8 @@ COPY packvault/__version__.py ./packvault/__version__.py
 RUN pip install --no-cache-dir -e ".[dev]"
 
 COPY packvault ./packvault
+COPY alembic.ini ./
+COPY alembic ./alembic/
 
 USER packvault
 

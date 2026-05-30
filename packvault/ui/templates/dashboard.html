@@ -14,6 +14,12 @@
       <a href="/logout">Logout</a>
     </header>
 
+    {% if setup_complete %}
+    <div class="banner success" role="status">
+      <p>PackVault initialization completed successfully.</p>
+    </div>
+    {% endif %}
+
     <section class="card">
       <h2>Signed in</h2>
       <p><strong>User:</strong> {{ user.name or user.subject }}</p>

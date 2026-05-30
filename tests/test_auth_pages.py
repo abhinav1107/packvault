@@ -6,15 +6,10 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from packvault.api.error_handling import UI_FORM_ERROR_MESSAGES
-from packvault.auth.google import create_google_oauth
-from packvault.auth.sessions import SessionManager
-from packvault.auth.tokens import TokenRegistry
 from packvault.config.settings import GoogleAuthConfig, Settings
 from packvault.main import create_app
-from packvault.repositories.registry import build_registry
-from packvault.runtime import AppState
-from packvault.storage.factory import create_artifact_store
 from tests.asgi_helpers import asgi_with_local_port
+from tests.conftest import build_test_app_state
 
 
 @pytest.fixture
@@ -27,16 +22,7 @@ async def google_client(test_settings: Settings) -> Generator[AsyncClient]:
     )
 
     app = create_app(settings)
-    app_state = AppState(
-        settings=settings,
-        store=create_artifact_store(settings),
-        repositories=build_registry(settings),
-        tokens=TokenRegistry.from_config(settings.auth.tokens),
-        sessions=SessionManager(settings.server.session_secret),
-        google_oauth=create_google_oauth(settings),
-        startup_complete=True,
-    )
-    app.state.app_state = app_state
+    app.state.app_state = build_test_app_state(settings)
     transport = ASGITransport(
         app=asgi_with_local_port(app, settings.server.port),
         raise_app_exceptions=False,

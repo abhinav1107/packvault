@@ -40,7 +40,7 @@ PackVault is a small, security-focused **Maven/Gradle artifact gateway**. It sto
 - **Maven-compatible HTTP**: `GET`, `HEAD`, and `PUT` on standard artifact paths.
 - **Two storage modes**:
   - **Local disk** — simple, single-server deployments.
-  - **S3-compatible storage** (AWS S3, MinIO, etc.) — object storage as source of truth, with local cache.
+  - **S3-compatible storage** (AWS S3, LocalStack, etc.) — object storage as source of truth, with local cache.
 - **Repository policy**: `releases` immutable by default (`409 Conflict` on overwrite); `snapshots` can allow overwrites.
 - **Two auth channels**:
   - **Browser UI** — local username/password and optional Google SSO.
@@ -90,8 +90,8 @@ packvault/
 │   ├── observability/      # Logging, metrics, health probe logic
 │   └── ui/                 # HTML templates and static CSS
 ├── config/
-│   ├── dev.yaml            # Local Docker / dev (values from env)
-│   ├── dev-s3.yaml         # MinIO / S3 dev config
+│   ├── dev.yaml            # Local disk / dev (values from env)
+│   ├── dev-localstack.yaml # LocalStack S3 + Secrets Manager dev config
 │   └── example.yaml        # Documented static example
 ├── charts/packvault/       # Helm chart
 ├── docs/                   # Detailed guides
@@ -160,14 +160,17 @@ PACKVAULT_CI_TOKEN_HASH=sha256:...
 PACKVAULT_READER_TOKEN_HASH=sha256:...
 ```
 
-### Step 4 — Start PackVault (local storage)
+### Step 4 — Start PackVault (LocalStack + PostgreSQL)
 
 ```bash
 docker compose up --build
 ```
 
 - App URL: http://localhost:8080 (or the port from `PACKVAULT_HOST_PORT` in `.env`)
-- Config file mounted: `config/dev.yaml` (all values pulled from environment via `${env.VAR}`)
+- Config file mounted: `config/dev-localstack.yaml` by default (S3 + Secrets Manager via LocalStack, PostgreSQL for app data)
+- LocalStack: http://localhost:4566
+
+To use local disk instead of S3, set `PACKVAULT_CONFIG=/config/dev.yaml` in `.env`.
 
 ### Step 5 — Sign in to the UI
 
@@ -194,21 +197,15 @@ curl -u "app-reader:my-reader-secret" \
 
 You should see `hello` in the response.
 
-### Optional — S3 mode with MinIO
+### Local disk mode (optional)
 
-Docker Compose starts MinIO and the bucket initialization container by default. Switch PackVault to S3 mode by changing this value in `.env`:
+Docker Compose defaults to LocalStack-backed S3. For local disk storage only, set in `.env`:
 
 ```env
-PACKVAULT_CONFIG_FILE=./config/dev-s3.yaml
+PACKVAULT_CONFIG=/config/dev.yaml
 ```
 
-Then run:
-
-```bash
-docker compose up --build
-```
-
-This creates the MinIO bucket and runs PackVault against S3-compatible storage. Set `PACKVAULT_S3_ACCESS_KEY_ID` / `PACKVAULT_S3_SECRET_ACCESS_KEY` in `.env` if you change the MinIO credentials. Defaults match the local MinIO root user in `env.example`.
+Then run `docker compose up --build` as usual. LocalStack still starts but PackVault uses the on-disk backend.
 
 ---
 
@@ -410,8 +407,8 @@ See [docs/configuration.md](docs/configuration.md) for the full reference, repos
 | `logging`      | `level` and `format` (`json` or `standard`)                |
 
 Example templates:
-- [config/dev.yaml](config/dev.yaml) — development / Docker (env-driven)
-- [config/dev-s3.yaml](config/dev-s3.yaml) — MinIO / S3 development
+- [config/dev.yaml](config/dev.yaml) — local disk development / Docker
+- [config/dev-localstack.yaml](config/dev-localstack.yaml) — LocalStack S3 + Secrets Manager (Docker default)
 
 ### Environment variable reference (`env.example`)
 
@@ -432,8 +429,10 @@ Copy [env.example](env.example) to `.env`. Important variables:
 | `PACKVAULT_LOG_FORMAT`                | No                      | `json` or `standard`                                         |
 | `PACKVAULT_LOCAL_ROOT`                | No                      | Local storage directory, default `/data` in containers       |
 | `PACKVAULT_S3_*`                      | For S3 mode             | Endpoint, bucket, region, prefix, and S3-compatible settings |
+| `PACKVAULT_AWS_*`                     | LocalStack / AWS        | Shared endpoint, region, and credentials for boto3 clients   |
+| `PACKVAULT_SECRETS_MANAGER_SECRET_ID` | With encryption         | Secrets Manager secret id for the master key                 |
 
-For S3, Docker Compose sets `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` from `PACKVAULT_S3_ACCESS_KEY_ID` / `PACKVAULT_S3_SECRET_ACCESS_KEY`.
+For S3 and Secrets Manager, Docker Compose sets `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` from `PACKVAULT_AWS_ACCESS_KEY_ID` / `PACKVAULT_AWS_SECRET_ACCESS_KEY` (LocalStack default: `test` / `test`).
 
 In Kubernetes, prefer cloud-native identity such as Pod Identity, IRSA, workload identity, or Secret-backed environment variables instead of storing static S3 credentials in ConfigMaps.
 
@@ -467,15 +466,15 @@ Token permissions are defined in YAML under `auth.tokens` (repository name + `re
 ### S3-compatible (`storage.backend: s3`)
 
 - Artifacts live in a bucket (`storage.s3.bucket`) with optional `prefix`.
-- Supports AWS S3, MinIO, and other S3-compatible endpoints via `endpointUrl` and `pathStyle`.
+- Supports AWS S3, LocalStack, and other S3-compatible endpoints via `endpointUrl` and `pathStyle`.
 - PackVault uses the configured cache path as a local read-through/write-through artifact cache.
 - The default cache path is `/data`; in S3 mode this path is disposable because object storage is the source of truth.
 - Multiple application replicas can safely use the same bucket. In Kubernetes, make sure each replica has its own local workspace/cache volume unless you intentionally provide shared RWX storage.
 
-| Mode       | Compose config                               | Command                     |
-|------------|----------------------------------------------|-----------------------------|
-| Local      | `PACKVAULT_CONFIG_FILE=./config/dev.yaml`    | `docker compose up --build` |
-| S3 + MinIO | `PACKVAULT_CONFIG_FILE=./config/dev-s3.yaml` | `docker compose up --build` |
+| Mode              | Compose config                                    | Command                     |
+|-------------------|---------------------------------------------------|-----------------------------|
+| LocalStack (default) | `PACKVAULT_CONFIG=/config/dev-localstack.yaml` | `docker compose up --build` |
+| Local disk        | `PACKVAULT_CONFIG=/config/dev.yaml`            | `docker compose up --build` |
 
 ---
 
@@ -682,7 +681,7 @@ GitHub Actions (`.github/workflows/ci.yaml`) runs Ruff, pytest, Python package b
 
 ### `503` on `/readyz` but `/livez` is OK
 
-- Storage is temporarily unreachable (common with S3/MinIO). The pod should not be restarted; fix storage or networking.
+- Storage is temporarily unreachable (common with S3/LocalStack). The pod should not be restarted; fix storage or networking.
 
 ### Docker Compose: empty password hash errors
 

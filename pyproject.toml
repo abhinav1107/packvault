@@ -25,6 +25,10 @@ dependencies = [
     "prometheus-client>=0.21.0",
     "aioboto3>=13.2.0",
     "aiofiles>=24.1.0",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30.0",
+    "alembic>=1.14.0",
+    "cryptography>=44.0.0",
 ]
 
 [project.optional-dependencies]

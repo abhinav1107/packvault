@@ -18,7 +18,8 @@ FROM python:3.13-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PACKVAULT_CONFIG=/config/config.yaml
+    PACKVAULT_CONFIG=/config/config.yaml \
+    PACKVAULT_APP_ROOT=/app
 
 RUN useradd --create-home --uid 1000 --shell /usr/sbin/nologin packvault \
     && mkdir -p /app /config /data/maven /cache/maven \
@@ -30,6 +31,9 @@ COPY --from=builder /wheels /wheels
 
 RUN pip install --no-cache-dir /wheels/*.whl \
     && rm -rf /wheels
+
+COPY alembic.ini ./
+COPY alembic ./alembic/
 
 USER packvault
 

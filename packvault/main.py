@@ -25,11 +25,13 @@ from packvault.api.routes_auth import router as auth_router
 from packvault.api.routes_maven import router as maven_router
 from packvault.api.routes_operations import router as operations_router
 from packvault.api.routes_ping import router as ping_router
+from packvault.api.routes_setup import router as setup_router
 from packvault.api.routes_ui import router as ui_router
 from packvault.auth.google import create_google_oauth
 from packvault.auth.sessions import SessionManager
 from packvault.auth.tokens import TokenRegistry
 from packvault.config.settings import Settings, load_settings
+from packvault.db.engine import create_database_manager
 from packvault.observability.logging import (
     build_uvicorn_log_config,
     resolve_logging_options,
@@ -42,7 +44,10 @@ from packvault.observability.port_routing import (
 )
 from packvault.repositories.registry import build_registry
 from packvault.runtime import AppState
+from packvault.secrets.encryption import EncryptionContext
+from packvault.secrets.protector import SecretProtector
 from packvault.security.headers import SecurityHeadersMiddleware
+from packvault.setup.startup import load_system_initialized, validate_startup_database
 from packvault.storage.factory import create_artifact_store
 from packvault.ui.templates_ctx import templates
 from packvault.utils.errors import PackVaultError
@@ -70,6 +75,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(fastapi_app: FastAPI):
         store = create_artifact_store(cfg)
+        database = create_database_manager(cfg.database.url)
+        encryption = await EncryptionContext.from_config(cfg.secrets)
+        secret_protector = SecretProtector(encryption)
+
+        if database.enabled:
+            database.initialize()
 
         app_state = AppState(
             settings=cfg,
@@ -77,12 +88,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             repositories=build_registry(cfg),
             tokens=TokenRegistry.from_config(cfg.auth.tokens),
             sessions=SessionManager(cfg.server.session_secret),
+            database=database,
+            encryption=encryption,
+            secret_protector=secret_protector,
             google_oauth=create_google_oauth(cfg),
         )
 
         fastapi_app.state.app_state = app_state
 
         await store.check_health()
+
+        if database.enabled:
+            await validate_startup_database(cfg, database, encryption)
+            app_state.system_initialized = await load_system_initialized(database)
 
         app_state.startup_complete = True
 
@@ -99,6 +117,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         yield
 
         app_state.shutting_down = True
+        if database.enabled:
+            await database.close()
         logger.info("PackVault %s shutting down", __version__)
 
     app = FastAPI(title="PackVault", version=__version__, lifespan=lifespan)
@@ -147,6 +167,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(ping_router)
     app.include_router(operations_router)
     app.include_router(ui_router)
+    app.include_router(setup_router)
     app.include_router(auth_router)
     app.include_router(maven_router)
 

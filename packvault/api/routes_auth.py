@@ -8,6 +8,7 @@ from fastapi.responses import RedirectResponse, Response
 
 from packvault.api.deps import get_state
 from packvault.api.error_handling import log_request_error, login_form_error_redirect
+from packvault.auth.bootstrap import post_login_redirect_path
 from packvault.auth.google import user_from_google_claims
 from packvault.auth.local import authenticate_local
 from packvault.runtime import AppState
@@ -53,7 +54,12 @@ async def login_post(
     user = authenticate_local(username, password, state.settings.auth.local)
     session = state.sessions.create(user)
 
-    response = RedirectResponse(url="/dashboard", status_code=303)
+    redirect_url = post_login_redirect_path(
+        user,
+        state.settings,
+        system_initialized=state.system_initialized,
+    )
+    response = RedirectResponse(url=redirect_url, status_code=303)
     _set_session_cookie(response, session, state)
 
     return response
@@ -106,7 +112,12 @@ async def google_callback(
     user = user_from_google_claims(userinfo)
     session = state.sessions.create(user)
 
-    response = RedirectResponse(url="/dashboard", status_code=303)
+    redirect_url = post_login_redirect_path(
+        user,
+        state.settings,
+        system_initialized=state.system_initialized,
+    )
+    response = RedirectResponse(url=redirect_url, status_code=303)
     _set_session_cookie(response, session, state)
 
     return response

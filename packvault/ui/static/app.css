@@ -99,3 +99,21 @@ pre {
   color: #9aa7b5;
   font-size: 0.9rem;
 }
+
+.status.ok {
+  color: #6fcf97;
+}
+
+.status.bad {
+  color: #ff8a8a;
+}
+
+.hint {
+  color: #9aa7b5;
+  font-size: 0.9rem;
+}
+
+.banner.success {
+  background: #1f3a2a;
+  border: 1px solid #3a7a55;
+}

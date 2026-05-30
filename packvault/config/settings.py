@@ -137,6 +137,38 @@ class LoggingConfig(BaseModel):
     format: LogFormat = "json"
 
 
+EncryptionKeyProvider = Literal["environment", "aws_secrets_manager"]
+
+
+class EnvironmentKeyConfig(BaseModel):
+    variable: str = "PACKVAULT_SECRETS_ENCRYPTION_KEY"
+
+
+class AwsSecretsManagerKeyConfig(BaseModel):
+    secret_id: str = ""
+    region: str = "us-east-1"
+    endpoint_url: str = ""
+    version_id: str = ""
+    version_stage: str = ""
+
+
+class EncryptionKeyConfig(BaseModel):
+    provider: EncryptionKeyProvider = "environment"
+    environment: EnvironmentKeyConfig = Field(default_factory=EnvironmentKeyConfig)
+    aws_secrets_manager: AwsSecretsManagerKeyConfig = Field(
+        default_factory=AwsSecretsManagerKeyConfig
+    )
+
+
+class SecretsConfig(BaseModel):
+    encrypt_at_rest: bool = False
+    encryption_key: EncryptionKeyConfig = Field(default_factory=EncryptionKeyConfig)
+
+
+class DatabaseConfig(BaseModel):
+    url: str = ""
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="PACKVAULT_",
@@ -155,8 +187,14 @@ class Settings(BaseSettings):
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    database: DatabaseConfig = Field(default_factory=DatabaseConfig)
+    secrets: SecretsConfig = Field(default_factory=SecretsConfig)
 
     config_path: Path | None = None
+
+    @property
+    def database_enabled(self) -> bool:
+        return bool(self.database.url.strip())
 
     @model_validator(mode="after")
     def validate_repository_references(self) -> Settings:

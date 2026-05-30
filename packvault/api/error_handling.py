@@ -15,8 +15,8 @@ from packvault.utils.request_id import get_request_id
 logger = logging.getLogger(__name__)
 
 _OPERATIONS_PATHS = frozenset({"/ping", "/livez", "/readyz", "/startupz", "/metrics"})
-_UI_EXACT_PATHS = frozenset({"/", "/login", "/dashboard", "/logout", "/logged-out"})
-_UI_PATH_PREFIXES = ("/auth/google/",)
+_UI_EXACT_PATHS = frozenset({"/", "/login", "/dashboard", "/logout", "/logged-out", "/setup"})
+_UI_PATH_PREFIXES = ("/auth/google/", "/admin/setup/")
 
 UI_FORM_ERROR_MESSAGES: dict[str, str] = {
     "unauthorized": "Sign-in failed. Check your username and password and try again.",

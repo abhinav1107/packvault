@@ -9,20 +9,28 @@ from packvault.auth.passwords import hash_password
 from packvault.auth.sessions import SessionManager
 from packvault.auth.tokens import TokenRegistry
 from packvault.config.settings import AuthConfig, LocalAuthConfig, ServerConfig, Settings
+from packvault.db.engine import create_database_manager
 from packvault.main import create_app
 from packvault.repositories.registry import build_registry
 from packvault.runtime import AppState
+from packvault.secrets.encryption import EncryptionContext
+from packvault.secrets.protector import SecretProtector
 from packvault.storage.local import LocalArtifactStore
 from tests.asgi_helpers import asgi_with_local_port
 
 
 def _app_state(settings: Settings, store: LocalArtifactStore) -> AppState:
+    database = create_database_manager(settings.database.url)
+    encryption = EncryptionContext(enabled=False, key=None, fingerprint=None)
     return AppState(
         settings=settings,
         store=store,
         repositories=build_registry(settings),
         tokens=TokenRegistry.from_config([]),
         sessions=SessionManager(settings.server.session_secret),
+        database=database,
+        encryption=encryption,
+        secret_protector=SecretProtector(encryption),
         startup_complete=True,
     )
 
