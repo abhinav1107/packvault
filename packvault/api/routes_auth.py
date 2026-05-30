@@ -42,6 +42,12 @@ def _delete_session_cookie(response: Response, state: AppState) -> None:
     )
 
 
+def _login_success_redirect_path(redirect_url: str) -> str:
+    if redirect_url == "/dashboard":
+        return "/packages"
+    return redirect_url
+
+
 @router.post("/login")
 async def login_post(
     username: Annotated[str, Form()],
@@ -59,7 +65,10 @@ async def login_post(
         state.settings,
         system_initialized=state.system_initialized,
     )
-    response = RedirectResponse(url=redirect_url, status_code=303)
+    response = RedirectResponse(
+        url=_login_success_redirect_path(redirect_url),
+        status_code=303,
+    )
     _set_session_cookie(response, session, state)
 
     return response
@@ -117,7 +126,10 @@ async def google_callback(
         state.settings,
         system_initialized=state.system_initialized,
     )
-    response = RedirectResponse(url=redirect_url, status_code=303)
+    response = RedirectResponse(
+        url=_login_success_redirect_path(redirect_url),
+        status_code=303,
+    )
     _set_session_cookie(response, session, state)
 
     return response

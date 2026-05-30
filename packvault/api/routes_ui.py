@@ -15,6 +15,7 @@ from packvault.ui.templates_ctx import templates
 
 router = APIRouter(tags=["ui"])
 
+
 def _repository_summaries(state: AppState) -> list[dict]:
     return [
         {"name": repo.name, "allow_overwrite": repo.allow_overwrite}
@@ -55,6 +56,7 @@ def _sort_packages(packages: list[PackageSummary], sort: str) -> list[PackageSum
 
     return sorted(packages, key=lambda package: package.package_name)
 
+
 @router.get("/favicon.ico", include_in_schema=False)
 async def favicon() -> FileResponse:
     return FileResponse(STATIC_FAVICON_PATH, media_type="image/x-icon")
@@ -90,7 +92,7 @@ async def landing(
             state.settings,
             system_initialized=state.system_initialized,
         )
-        return RedirectResponse(redirect_url, status_code=302)
+        return RedirectResponse(_primary_app_path(redirect_url), status_code=302)
 
     return templates.TemplateResponse(
         request,
@@ -174,6 +176,7 @@ async def dashboard(
             "setup_complete": setup_complete,
         },
     )
+
 
 @router.get("/packages", response_class=HTMLResponse)
 async def packages_page(
