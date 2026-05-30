@@ -1,15 +1,28 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
 from packvault.api.deps import get_optional_session, get_state
 from packvault.api.error_handling import UI_FORM_ERROR_MESSAGES
 from packvault.auth.permissions import SessionUser
 from packvault.runtime import AppState
+from packvault.ui.branding import STATIC_FAVICON_PATH
 from packvault.ui.templates_ctx import templates
 
 router = APIRouter(tags=["ui"])
+
+_FAVICON_PATH = STATIC_FAVICON_PATH
+
+
+@router.get("/favicon.ico", include_in_schema=False)
+async def favicon() -> FileResponse:
+    return FileResponse(_FAVICON_PATH, media_type="image/x-icon")
+
+
+@router.get("/favicon.ico/", include_in_schema=False)
+async def favicon_trailing_slash() -> RedirectResponse:
+    return RedirectResponse("/favicon.ico", status_code=301)
 
 
 def _login_context(state: AppState, request: Request) -> dict:
@@ -51,6 +64,11 @@ async def login_page(
         "login.html",
         _login_context(state, request),
     )
+
+
+@router.get("/logged-out", response_class=HTMLResponse)
+async def logged_out_page(request: Request):
+    return templates.TemplateResponse(request, "logged_out.html", {})
 
 
 @router.get("/dashboard", response_class=HTMLResponse)

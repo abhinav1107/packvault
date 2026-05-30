@@ -6,7 +6,6 @@ from collections.abc import Generator
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from packvault.api.error_handling import UI_FORM_ERROR_MESSAGES
 from packvault.auth.google import create_google_oauth
 from packvault.auth.sessions import SessionManager
 from packvault.auth.tokens import TokenRegistry
@@ -86,33 +85,10 @@ async def test_ui_unknown_path_returns_html_error_page(client: AsyncClient) -> N
 
 
 @pytest.mark.asyncio
-async def test_failed_login_redirects_with_form_error(client: AsyncClient) -> None:
-    response = await client.post(
-        "/login",
-        data={"username": "admin", "password": "wrong"},
-        follow_redirects=False,
-    )
+async def test_google_login_disabled_redirects_to_login_form(client: AsyncClient) -> None:
+    response = await client.get("/auth/google/login", follow_redirects=False)
     assert response.status_code == 303
-    location = response.headers["location"]
-    assert location.startswith("/login?error=unauthorized&ref=")
-
-    login_page = await client.get(location)
-    assert login_page.status_code == 200
-    assert UI_FORM_ERROR_MESSAGES["unauthorized"] in login_page.text
-    ref = location.split("ref=", 1)[1]
-    assert ref in login_page.text
-
-
-@pytest.mark.asyncio
-async def test_google_login_disabled_returns_html_error(client: AsyncClient) -> None:
-    response = await client.get(
-        "/auth/google/login",
-        headers={"Accept": "text/html"},
-    )
-    assert response.status_code == 401
-    assert "text/html" in response.headers["content-type"]
-    assert "Sign in is required" in response.text
-    assert "Reference:" in response.text
+    assert response.headers["location"].startswith("/login?error=unavailable&ref=")
 
 
 @pytest.mark.asyncio

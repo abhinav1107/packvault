@@ -9,20 +9,29 @@ from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from packvault.api.deps import get_optional_app_state
-from packvault.utils.errors import PackVaultError, UnauthorizedError
+from packvault.utils.errors import NotFoundError, PackVaultError, UnauthorizedError
 from packvault.utils.request_id import get_request_id
 
 logger = logging.getLogger(__name__)
 
 _OPERATIONS_PATHS = frozenset({"/ping", "/livez", "/readyz", "/startupz", "/metrics"})
-_UI_EXACT_PATHS = frozenset({"/", "/login", "/dashboard", "/logout"})
+_UI_EXACT_PATHS = frozenset({"/", "/login", "/dashboard", "/logout", "/logged-out"})
 _UI_PATH_PREFIXES = ("/auth/google/",)
 
 UI_FORM_ERROR_MESSAGES: dict[str, str] = {
     "unauthorized": "Sign-in failed. Check your username and password and try again.",
+    "google_sign_in_failed": "Google sign-in failed or was cancelled. Please try again.",
     "forbidden": "You do not have permission to perform that action.",
     "unavailable": "Sign-in is temporarily unavailable. Please try again later.",
 }
+
+_GOOGLE_OAUTH_UNAVAILABLE_MESSAGES = frozenset(
+    {
+        "google sso disabled",
+        "google sso not configured",
+        "local login disabled",
+    }
+)
 
 
 def _known_repositories(request: Request) -> set[str]:
@@ -82,6 +91,12 @@ def request_user_label(request: Request) -> str | None:
 
 
 def log_request_error(request: Request, exc: BaseException) -> None:
+    if isinstance(exc, NotFoundError) and not is_maven_api_path(
+        request.url.path,
+        _known_repositories(request),
+    ):
+        return
+
     extra: dict[str, Any] = {
         "route": request.url.path,
         "method": request.method,
@@ -169,17 +184,32 @@ def login_form_error_redirect(error_code: str) -> RedirectResponse:
     )
 
 
+def login_error_code_for_unauthorized(exc: UnauthorizedError, path: str) -> str:
+    if path.startswith("/auth/google/"):
+        if exc.message.lower() in _GOOGLE_OAUTH_UNAVAILABLE_MESSAGES:
+            return "unavailable"
+        return "google_sign_in_failed"
+    return "unauthorized"
+
+
+def should_redirect_unauthorized_to_login(request: Request) -> bool:
+    path = request.url.path
+    if request.method == "POST" and path == "/login":
+        return True
+    return path.startswith("/auth/google/")
+
+
 def resolve_response_for_packvault_error(
     request: Request,
     exc: PackVaultError,
     templates: Jinja2Templates,
 ) -> Response:
-    if (
-        request.method == "POST"
-        and request.url.path == "/login"
-        and isinstance(exc, UnauthorizedError)
+    if isinstance(exc, UnauthorizedError) and should_redirect_unauthorized_to_login(
+        request
     ):
-        return login_form_error_redirect("unauthorized")
+        return login_form_error_redirect(
+            login_error_code_for_unauthorized(exc, request.url.path)
+        )
 
     if wants_html_error_response(request):
         return html_error_response(

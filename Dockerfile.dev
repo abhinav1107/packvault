@@ -1,0 +1,25 @@
+FROM python:3.13-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PACKVAULT_CONFIG=/config/config.yaml
+
+RUN useradd --create-home --uid 1000 --shell /usr/sbin/nologin packvault \
+    && mkdir -p /app /config /data/maven /cache/maven \
+    && chown -R packvault:packvault /app /config /data /cache
+
+WORKDIR /app
+
+COPY pyproject.toml README.md ./
+COPY packvault/__init__.py ./packvault/__init__.py
+COPY packvault/__version__.py ./packvault/__version__.py
+
+RUN pip install --no-cache-dir -e ".[dev]"
+
+COPY packvault ./packvault
+
+USER packvault
+
+EXPOSE 8080 9090
+
+CMD ["packvault"]

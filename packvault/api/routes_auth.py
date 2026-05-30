@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from typing import Annotated
 
+from authlib.integrations.base_client.errors import OAuthError
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse, Response
 
 from packvault.api.deps import get_state
+from packvault.api.error_handling import log_request_error, login_form_error_redirect
 from packvault.auth.google import user_from_google_claims
 from packvault.auth.local import authenticate_local
 from packvault.runtime import AppState
@@ -59,7 +61,7 @@ async def login_post(
 
 @router.get("/logout")
 async def logout(state: AppState = Depends(get_state)) -> RedirectResponse:
-    response = RedirectResponse(url="/", status_code=303)
+    response = RedirectResponse(url="/logged-out", status_code=303)
     _delete_session_cookie(response, state)
     return response
 
@@ -91,7 +93,11 @@ async def google_callback(
     if state.google_oauth is None:
         raise UnauthorizedError("Google SSO not configured")
 
-    token = await state.google_oauth.google.authorize_access_token(request)
+    try:
+        token = await state.google_oauth.google.authorize_access_token(request)
+    except OAuthError as exc:
+        log_request_error(request, exc)
+        return login_form_error_redirect("google_sign_in_failed")
 
     userinfo = token.get("userinfo")
     if not userinfo:

@@ -107,6 +107,9 @@ async def get_artifact(
     metric_repository = repository
 
     try:
+        if repository not in state.repositories.names:
+            raise NotFoundError("Artifact not found")
+
         maven_req = parse_maven_request(
             repository,
             artifact_path,
@@ -191,6 +194,9 @@ async def put_artifact(
     principal_name = ctx.token.name if ctx.token else "unknown"
 
     try:
+        if repository not in state.repositories.names:
+            raise NotFoundError("Artifact not found")
+
         maven_req = parse_maven_request(
             repository,
             artifact_path,

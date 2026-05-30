@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="packvault/ui/static/branding/icon-512.png" alt="PackVault" width="128" height="128">
+</p>
+
 # PackVault
 
 **Secure Maven package hosting over local disk or S3-compatible storage.**
@@ -616,6 +620,19 @@ Adjust `image.repository`, `ingress`, `config.server.publicUrl`, `config.storage
 ---
 
 ## Development
+
+### Branding assets
+
+Icons and favicons are generated from a single master file: [`packvault/ui/static/branding/logo.png`](packvault/ui/static/branding/logo.png). See [`packvault/ui/static/branding/README.md`](packvault/ui/static/branding/README.md) for sizes and usage.
+
+After changing `logo.png`, regenerate derivatives:
+
+```bash
+pip install pillow   # or pip install -e ".[dev]"
+python scripts/generate_branding_assets.py
+```
+
+Programmatic paths: `packvault.ui.branding` (`LOGO_SOURCE`, `icon_png()`, `icon_static_url()`).
 
 ### Run tests
 
