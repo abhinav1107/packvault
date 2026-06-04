@@ -1,0 +1,25 @@
+<section class="side-card">
+  <h2>Repositories</h2>
+  <p class="side-card-summary">{{ configured_repository_count }} configured</p>
+  {% if repositories %}
+  <ul class="repo-list">
+    {% for repo in repositories %}
+    <li>
+      <div class="repo-row-heading">
+        <span class="repo-name">{{ repo.name }}</span>
+        <span class="repo-count">{{ repo.package_count }} package{% if repo.package_count != 1 %}s{% endif %}</span>
+      </div>
+      <div>
+        {% if repo.allow_overwrite %}
+        <span class="badge warn">overwrite allowed</span>
+        {% else %}
+        <span class="badge safe">overwrite disabled</span>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">No repositories configured.</p>
+  {% endif %}
+</section>

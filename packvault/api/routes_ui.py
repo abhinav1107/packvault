@@ -18,7 +18,9 @@ from packvault.ui.package_actions import (
     delete_artifact_version,
 )
 from packvault.ui.packages import (
+    PackageDetail,
     PackageSummary,
+    PackageVersionSummary,
     artifact_file_download_path,
     artifact_file_type,
     build_package_detail,
@@ -135,6 +137,38 @@ async def _package_index_context(request: Request, user: SessionUser, state: App
         "storage_backend": state.settings.storage.backend,
         "setup_complete": request.query_params.get("setup") == "complete",
     }
+
+
+async def _package_detail_or_404(
+    state: AppState,
+    *,
+    repository: str,
+    artifact_path: str,
+) -> PackageDetail:
+    if repository not in state.repositories.names:
+        raise HTTPException(status_code=404, detail="Repository not found")
+
+    keys = await list_keys_under_prefix(state.store, repository)
+    artifact_paths = [artifact_path_from_key(key, repository) for key in keys]
+    package = build_package_detail(repository, artifact_path, artifact_paths)
+
+    if package is None:
+        raise HTTPException(status_code=404, detail="Package not found")
+
+    return package
+
+
+def _version_or_404(
+    package: PackageDetail,
+    version: str,
+) -> PackageVersionSummary:
+    match = next(
+        (candidate for candidate in package.versions if candidate.version == version),
+        None,
+    )
+    if match is None:
+        raise HTTPException(status_code=404, detail="Version not found")
+    return match
 
 
 @router.get("/favicon.ico", include_in_schema=False)
@@ -275,28 +309,61 @@ async def package_detail_page(
     if user is None:
         return RedirectResponse("/login", status_code=302)
 
-    if repository not in state.repositories.names:
-        raise HTTPException(status_code=404, detail="Repository not found")
-
-    keys = await list_keys_under_prefix(state.store, repository)
-    artifact_paths = [artifact_path_from_key(key, repository) for key in keys]
-    package = build_package_detail(repository, package_path, artifact_paths)
-
-    if package is None:
-        raise HTTPException(status_code=404, detail="Package not found")
+    package = await _package_detail_or_404(
+        state,
+        repository=repository,
+        artifact_path=package_path,
+    )
 
     return templates.TemplateResponse(
         request,
         "package_detail.html",
         {
             "user": user,
-            "repositories": _repository_summaries(state),
+            "repositories": await _repository_summaries_with_counts(state),
+            "configured_repository_count": len(state.settings.repositories),
             "repository": repository,
             "package": package,
             "providers": state.settings.auth.providers,
             "storage_backend": state.settings.storage.backend,
             "artifact_file_type": artifact_file_type,
             "artifact_file_download_path": artifact_file_download_path,
+        },
+    )
+
+
+@router.post("/package-actions/confirm-delete-version")
+async def confirm_delete_package_version(
+    request: Request,
+    user: SessionUser | None = Depends(get_optional_session),
+    state: AppState = Depends(get_state),
+    repository: str = Form(...),
+    artifact_path: str = Form(...),
+    version: str = Form(...),
+):
+    if user is None:
+        return RedirectResponse("/login", status_code=302)
+
+    package = await _package_detail_or_404(
+        state,
+        repository=repository,
+        artifact_path=artifact_path,
+    )
+    selected_version = _version_or_404(package, version)
+
+    return templates.TemplateResponse(
+        request,
+        "confirm_delete.html",
+        {
+            "user": user,
+            "repositories": await _repository_summaries_with_counts(state),
+            "configured_repository_count": len(state.settings.repositories),
+            "storage_backend": state.settings.storage.backend,
+            "package": package,
+            "version": selected_version,
+            "mode": "version",
+            "confirm_action": "/package-actions/delete-version",
+            "cancel_url": _package_detail_path(repository, artifact_path),
         },
     )
 
@@ -342,6 +409,40 @@ async def delete_package_version(
         return RedirectResponse(_packages_query(repository), status_code=303)
 
     return RedirectResponse(_package_detail_path(repository, artifact_path), status_code=303)
+
+
+@router.post("/package-actions/confirm-delete-package")
+async def confirm_delete_package(
+    request: Request,
+    user: SessionUser | None = Depends(get_optional_session),
+    state: AppState = Depends(get_state),
+    repository: str = Form(...),
+    artifact_path: str = Form(...),
+):
+    if user is None:
+        return RedirectResponse("/login", status_code=302)
+
+    package = await _package_detail_or_404(
+        state,
+        repository=repository,
+        artifact_path=artifact_path,
+    )
+
+    return templates.TemplateResponse(
+        request,
+        "confirm_delete.html",
+        {
+            "user": user,
+            "repositories": await _repository_summaries_with_counts(state),
+            "configured_repository_count": len(state.settings.repositories),
+            "storage_backend": state.settings.storage.backend,
+            "package": package,
+            "version": None,
+            "mode": "package",
+            "confirm_action": "/package-actions/delete-package",
+            "cancel_url": _package_detail_path(repository, artifact_path),
+        },
+    )
 
 
 @router.post("/package-actions/delete-package")

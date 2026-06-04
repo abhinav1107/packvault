@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PackVault — Confirm delete</title>
+  {% include "_head_icons.html" %}
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">PV</div>
+        <div>
+          <strong>PackVault</strong>
+          <span>Maven registry</span>
+        </div>
+      </div>
+
+      <nav class="side-nav" aria-label="Primary navigation">
+        <a href="/dashboard">Dashboard</a>
+        <a href="/logout">Logout</a>
+      </nav>
+
+      <section class="side-card">
+        <h2>Signed in</h2>
+        <dl>
+          <dt>User</dt>
+          <dd>{{ user.name or user.subject }}</dd>
+          <dt>Auth Provider</dt>
+          <dd>{{ user.provider }}</dd>
+          <dt>Storage backend</dt>
+          <dd>{{ storage_backend }}</dd>
+        </dl>
+      </section>
+
+      {% include "_sidebar_repositories.html" %}
+    </aside>
+
+    <section class="content">
+      <header class="page-header package-detail-header">
+        <div>
+          <p class="eyebrow">Confirm destructive action</p>
+          {% if mode == "version" %}
+          <h1>Delete version {{ version.version }}?</h1>
+          <p>{{ package.package_name }} in <code>{{ package.repository }}</code></p>
+          {% else %}
+          <h1>Delete package {{ package.package_name }}?</h1>
+          <p>{{ package.artifact_path }} in <code>{{ package.repository }}</code></p>
+          {% endif %}
+        </div>
+        <div class="page-actions">
+          <a class="button secondary" href="{{ cancel_url }}">Cancel</a>
+        </div>
+      </header>
+
+      <section class="card danger-zone confirm-delete-card">
+        <h2>This cannot be undone</h2>
+        {% if mode == "version" %}
+        <p>
+          This will delete version <code>{{ version.version }}</code> and all files stored under
+          <code>{{ version.path }}</code>, including checksum sidecars.
+        </p>
+        {% else %}
+        <p>
+          This will delete all {{ package.version_count }} version{% if package.version_count != 1 %}s{% endif %}
+          and every file stored under <code>{{ package.artifact_path }}</code>, including checksum sidecars and metadata.
+        </p>
+        {% endif %}
+
+        <form method="post" action="{{ confirm_action }}" class="confirm-delete-form">
+          <input type="hidden" name="repository" value="{{ package.repository }}">
+          <input type="hidden" name="artifact_path" value="{{ package.artifact_path }}">
+          {% if mode == "version" %}
+          <input type="hidden" name="version" value="{{ version.version }}">
+          <button type="submit" class="button danger">Confirm delete version {{ version.version }}</button>
+          {% else %}
+          <button type="submit" class="button danger">Confirm delete package {{ package.package_name }}</button>
+          {% endif %}
+          <a class="button secondary" href="{{ cancel_url }}">Cancel</a>
+        </form>
+      </section>
+
+      <section class="card package-card">
+        <div class="table-header">
+          <div>
+            <h2>Files that will be removed</h2>
+            {% if mode == "version" %}
+            <p>{{ version.files|length }} visible file{% if version.files|length != 1 %}s{% endif %} in this version.</p>
+            {% else %}
+            <p>{{ package.version_count }} version{% if package.version_count != 1 %}s{% endif %} in this package.</p>
+            {% endif %}
+          </div>
+        </div>
+
+        {% if mode == "version" %}
+        <div class="confirm-delete-list">
+          {% for file in version.files %}
+          <div class="file-row">
+            <span class="file-type">{{ file.rsplit(".", 1)[-1]|upper }}</span>
+            <code>{{ version.path }}/{{ file }}</code>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="version-list" role="list">
+          {% for package_version in package.versions %}
+          <div class="confirm-version-row" role="listitem">
+            <span><span class="version-pill">{{ package_version.version }}</span></span>
+            <code>{{ package_version.path }}</code>
+            <span>{{ package_version.files|length }} file{% if package_version.files|length != 1 %}s{% endif %}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </section>
+    </section>
+  </main>
+</body>
+</html>

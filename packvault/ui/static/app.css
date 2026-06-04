@@ -849,13 +849,42 @@ button.small,
   color: #cdb6bd;
 }
 
+.confirm-delete-card {
+  padding: 1.25rem;
+}
+
+.confirm-delete-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.confirm-delete-list {
+  display: grid;
+  padding: 0 1.25rem;
+}
+
+.confirm-version-row {
+  display: grid;
+  grid-template-columns: 160px minmax(260px, 1fr) 120px;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.95rem 1.25rem;
+  border-bottom: 1px solid #2a3544;
+}
+
+.confirm-version-row:last-child {
+  border-bottom: none;
+}
+
 @media (max-width: 860px) {
   .version-list-header {
     display: none;
   }
 
   .version-summary-row,
-  .version-files-expanded {
+  .version-files-expanded,
+  .confirm-version-row {
     display: flex;
     align-items: flex-start;
     flex-direction: column;

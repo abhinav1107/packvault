@@ -390,8 +390,11 @@ async def test_package_detail_shows_versions_files_links_and_actions(
     assert (
         "/artifacts?repository=releases&amp;prefix=com/example/simple-library/0.1.0"
     ) in response.text
-    assert 'action="/package-actions/delete-version"' in response.text
-    assert 'action="/package-actions/delete-package"' in response.text
+    assert "2 configured" in response.text
+    assert "1 package" in response.text
+    assert "0 packages" in response.text
+    assert 'action="/package-actions/confirm-delete-version"' in response.text
+    assert 'action="/package-actions/confirm-delete-package"' in response.text
 
 
 @pytest.mark.asyncio
@@ -405,6 +408,66 @@ async def test_package_detail_unknown_repository_and_package_return_404(
 
     unknown_package = await storage_client.get("/packages/releases/com/example/missing")
     assert unknown_package.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_package_delete_version_requires_confirmation_before_delete(
+    storage_client: AsyncClient,
+) -> None:
+    store: LocalArtifactStore = storage_client._store  # type: ignore[attr-defined]
+    artifact_path = "com/example/confirm-version"
+    jar_key = build_storage_key(
+        "releases",
+        f"{artifact_path}/1.0/confirm-version-1.0.jar",
+    )
+    await store.put(jar_key, _bytes_iter(b"jar"))
+
+    await _login(storage_client)
+
+    confirm = await storage_client.post(
+        "/package-actions/confirm-delete-version",
+        data={
+            "repository": "releases",
+            "artifact_path": artifact_path,
+            "version": "1.0",
+        },
+    )
+    assert confirm.status_code == 200
+    assert "Delete version 1.0?" in confirm.text
+    assert "Confirm delete version 1.0" in confirm.text
+    assert "2 configured" in confirm.text
+    assert "1 package" in confirm.text
+    assert "0 packages" in confirm.text
+    assert 'action="/package-actions/delete-version"' in confirm.text
+    assert await store.head(jar_key) is not None
+
+
+@pytest.mark.asyncio
+async def test_package_delete_package_requires_confirmation_before_delete(
+    storage_client: AsyncClient,
+) -> None:
+    store: LocalArtifactStore = storage_client._store  # type: ignore[attr-defined]
+    artifact_path = "com/example/confirm-package"
+    jar_key = build_storage_key(
+        "releases",
+        f"{artifact_path}/1.0/confirm-package-1.0.jar",
+    )
+    await store.put(jar_key, _bytes_iter(b"jar"))
+
+    await _login(storage_client)
+
+    confirm = await storage_client.post(
+        "/package-actions/confirm-delete-package",
+        data={"repository": "releases", "artifact_path": artifact_path},
+    )
+    assert confirm.status_code == 200
+    assert "Delete package com.example:confirm-package?" in confirm.text
+    assert "Confirm delete package com.example:confirm-package" in confirm.text
+    assert "2 configured" in confirm.text
+    assert "1 package" in confirm.text
+    assert "0 packages" in confirm.text
+    assert 'action="/package-actions/delete-package"' in confirm.text
+    assert await store.head(jar_key) is not None
 
 
 @pytest.mark.asyncio

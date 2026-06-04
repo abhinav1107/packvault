@@ -35,25 +35,7 @@
         </dl>
       </section>
 
-      <section class="side-card">
-        <h2>Repositories</h2>
-        {% if repositories %}
-        <ul class="repo-list">
-          {% for repo in repositories %}
-          <li>
-            <span class="repo-name">{{ repo.name }}</span>
-            {% if repo.allow_overwrite %}
-            <span class="badge warn">overwrite allowed</span>
-            {% else %}
-            <span class="badge safe">overwrite disabled</span>
-            {% endif %}
-          </li>
-          {% endfor %}
-        </ul>
-        {% else %}
-        <p class="muted">No repositories configured.</p>
-        {% endif %}
-      </section>
+      {% include "_sidebar_repositories.html" %}
     </aside>
 
     <section class="content">
@@ -156,9 +138,8 @@
                   <h3>Danger zone</h3>
                   <form
                     method="post"
-                    action="/package-actions/delete-version"
+                    action="/package-actions/confirm-delete-version"
                     class="delete-form"
-                    onsubmit="return confirm('Delete version {{ version.version }} of {{ package.package_name }}? This cannot be undone.');"
                   >
                     <input type="hidden" name="repository" value="{{ package.repository }}">
                     <input type="hidden" name="artifact_path" value="{{ package.artifact_path }}">
@@ -178,9 +159,8 @@
         <p>Delete all versions and files for <code>{{ package.package_name }}</code>.</p>
         <form
           method="post"
-          action="/package-actions/delete-package"
+          action="/package-actions/confirm-delete-package"
           class="delete-form"
-          onsubmit="return confirm('Delete package {{ package.package_name }} and all versions? This cannot be undone.');"
         >
           <input type="hidden" name="repository" value="{{ package.repository }}">
           <input type="hidden" name="artifact_path" value="{{ package.artifact_path }}">
