@@ -31,8 +31,6 @@ router = APIRouter(tags=["ui"])
 
 
 def _primary_app_path(redirect_url: str) -> str:
-    if redirect_url == "/dashboard":
-        return "/packages"
     return redirect_url
 
 
@@ -45,7 +43,7 @@ def _package_detail_path(repository: str, artifact_path: str) -> str:
 
 
 def _packages_query(repository: str) -> str:
-    return "/packages?" + urlencode({"repository": repository})
+    return "/dashboard?" + urlencode({"repository": repository})
 
 
 def _repository_summaries(state: AppState) -> list[dict]:
@@ -89,27 +87,6 @@ def _sort_packages(packages: list[PackageSummary], sort: str) -> list[PackageSum
     return sorted(packages, key=lambda package: package.package_name)
 
 
-def _repository_setup_snippet(state: AppState, repository: str) -> dict:
-    base_url = state.settings.server.public_url.rstrip("/")
-    url = f"{base_url}/{repository}"
-
-    return {
-        "name": repository,
-        "url": url,
-        "gradle": f'''maven {{
-    url = uri("{url}")
-    credentials {{
-        username = "YOUR_TOKEN_NAME"
-        password = findProperty("packvaultToken") as String? ?: System.getenv("PACKVAULT_TOKEN")
-    }}
-}}''',
-        "maven": f'''<repository>
-  <id>packvault-{repository}</id>
-  <url>{url}</url>
-</repository>''',
-    }
-
-
 async def _package_summaries_for_repository(
     state: AppState,
     repository: str,
@@ -117,6 +94,47 @@ async def _package_summaries_for_repository(
     keys = await list_keys_under_prefix(state.store, repository)
     artifact_paths = [artifact_path_from_key(key, repository) for key in keys]
     return build_package_summaries(repository, artifact_paths)
+
+
+async def _repository_summaries_with_counts(state: AppState) -> list[dict]:
+    rows = []
+    for repo in _repository_summaries(state):
+        packages = await _package_summaries_for_repository(state, repo["name"])
+        rows.append(
+            {
+                "name": repo["name"],
+                "allow_overwrite": repo["allow_overwrite"],
+                "package_count": len(packages),
+            }
+        )
+    return rows
+
+
+async def _package_index_context(request: Request, user: SessionUser, state: AppState) -> dict:
+    repositories = await _repository_summaries_with_counts(state)
+    requested_repository = request.query_params.get("repository")
+    repository = _selected_repository(state, requested_repository)
+    query = request.query_params.get("q", "")
+    sort = request.query_params.get("sort", "name")
+
+    packages: list[PackageSummary] = []
+    if repository is not None:
+        packages = await _package_summaries_for_repository(state, repository)
+        packages = _filter_packages(packages, query)
+        packages = _sort_packages(packages, sort)
+
+    return {
+        "user": user,
+        "repositories": repositories,
+        "configured_repository_count": len(repositories),
+        "repository": repository,
+        "packages": packages,
+        "query": query,
+        "sort": sort,
+        "providers": state.settings.auth.providers,
+        "storage_backend": state.settings.storage.backend,
+        "setup_complete": request.query_params.get("setup") == "complete",
+    }
 
 
 @router.get("/favicon.ico", include_in_schema=False)
@@ -197,24 +215,14 @@ async def dashboard(
     if redirect_url != "/dashboard":
         return RedirectResponse(redirect_url, status_code=302)
 
-    repositories = _repository_summaries(state)
-
-    setup_complete = request.query_params.get("setup") == "complete"
-
     return templates.TemplateResponse(
         request,
-        "dashboard.html",
-        {
-            "user": user,
-            "repositories": repositories,
-            "providers": state.settings.auth.providers,
-            "storage_backend": state.settings.storage.backend,
-            "setup_complete": setup_complete,
-        },
+        "packages.html",
+        await _package_index_context(request, user, state),
     )
 
 
-@router.get("/packages", response_class=HTMLResponse)
+@router.get("/packages")
 async def packages_page(
     request: Request,
     user: SessionUser | None = Depends(get_optional_session),
@@ -223,35 +231,12 @@ async def packages_page(
     if user is None:
         return RedirectResponse("/login", status_code=302)
 
-    repositories = _repository_summaries(state)
-    requested_repository = request.query_params.get("repository")
-    repository = _selected_repository(state, requested_repository)
-    query = request.query_params.get("q", "")
-    sort = request.query_params.get("sort", "name")
-
-    packages: list[PackageSummary] = []
-    if repository is not None:
-        packages = await _package_summaries_for_repository(state, repository)
-        packages = _filter_packages(packages, query)
-        packages = _sort_packages(packages, sort)
-
-    return templates.TemplateResponse(
-        request,
-        "packages.html",
-        {
-            "user": user,
-            "repositories": repositories,
-            "repository": repository,
-            "packages": packages,
-            "query": query,
-            "sort": sort,
-            "providers": state.settings.auth.providers,
-            "storage_backend": state.settings.storage.backend,
-        },
-    )
+    query = request.url.query
+    location = "/dashboard" + (f"?{query}" if query else "")
+    return RedirectResponse(location, status_code=302)
 
 
-@router.get("/repositories", response_class=HTMLResponse)
+@router.get("/repositories")
 async def repositories_page(
     request: Request,
     user: SessionUser | None = Depends(get_optional_session),
@@ -260,31 +245,10 @@ async def repositories_page(
     if user is None:
         return RedirectResponse("/login", status_code=302)
 
-    repositories = _repository_summaries(state)
-    rows = []
-    for repo in repositories:
-        packages = await _package_summaries_for_repository(state, repo["name"])
-        rows.append(
-            {
-                "name": repo["name"],
-                "allow_overwrite": repo["allow_overwrite"],
-                "package_count": len(packages),
-            }
-        )
-
-    return templates.TemplateResponse(
-        request,
-        "repositories.html",
-        {
-            "user": user,
-            "repositories": rows,
-            "providers": state.settings.auth.providers,
-            "storage_backend": state.settings.storage.backend,
-        },
-    )
+    return RedirectResponse("/dashboard", status_code=302)
 
 
-@router.get("/repositories/{repository}", response_class=HTMLResponse)
+@router.get("/repositories/{repository}")
 async def repository_detail_page(
     repository: str,
     request: Request,
@@ -294,28 +258,10 @@ async def repository_detail_page(
     if user is None:
         return RedirectResponse("/login", status_code=302)
 
-    repositories = _repository_summaries(state)
-    selected = next((repo for repo in repositories if repo["name"] == repository), None)
-    if selected is None:
+    if repository not in state.repositories.names:
         raise HTTPException(status_code=404, detail="Repository not found")
 
-    packages = await _package_summaries_for_repository(state, repository)
-    recent_packages = _sort_packages(packages, "name")[:10]
-
-    return templates.TemplateResponse(
-        request,
-        "repository_detail.html",
-        {
-            "user": user,
-            "repositories": repositories,
-            "repository": selected,
-            "snippet": _repository_setup_snippet(state, repository),
-            "packages": recent_packages,
-            "package_count": len(packages),
-            "providers": state.settings.auth.providers,
-            "storage_backend": state.settings.storage.backend,
-        },
-    )
+    return RedirectResponse(_packages_query(repository), status_code=302)
 
 
 @router.get("/packages/{repository}/{package_path:path}", response_class=HTMLResponse)

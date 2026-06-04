@@ -249,11 +249,11 @@ async def test_artifacts_delete_artifact_removes_all_versions(
 @pytest.mark.asyncio
 async def test_primary_nav_hides_storage_browser(client: AsyncClient) -> None:
     await _login(client)
-    response = await client.get("/packages")
+    response = await client.get("/dashboard")
     assert response.status_code == 200
     assert 'href="/artifacts"' not in response.text
-    assert 'href="/packages"' in response.text
-    assert 'href="/repositories"' in response.text
+    assert 'href="/repositories"' not in response.text
+    assert 'href="/dashboard"' in response.text
 
 
 @pytest.mark.asyncio
@@ -267,10 +267,28 @@ async def test_dashboard_does_not_render_raw_css(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_packages_page_requires_session(client: AsyncClient) -> None:
+async def test_dashboard_requires_session(client: AsyncClient) -> None:
+    response = await client.get("/dashboard", follow_redirects=False)
+    assert response.status_code == 302
+    assert response.headers["location"] == "/login"
+
+
+@pytest.mark.asyncio
+async def test_packages_page_redirects_to_dashboard(client: AsyncClient) -> None:
     response = await client.get("/packages", follow_redirects=False)
     assert response.status_code == 302
     assert response.headers["location"] == "/login"
+
+    await _login(client)
+    redirect = await client.get(
+        "/packages?repository=releases&q=demo&sort=versions",
+        follow_redirects=False,
+    )
+    assert redirect.status_code == 302
+    assert (
+        redirect.headers["location"]
+        == "/dashboard?repository=releases&q=demo&sort=versions"
+    )
 
 
 @pytest.mark.asyncio
@@ -293,25 +311,30 @@ async def test_packages_page_lists_and_filters_package_summaries(
 
     await _login(storage_client)
 
-    page = await storage_client.get("/packages?repository=releases")
+    page = await storage_client.get("/dashboard?repository=releases")
     assert page.status_code == 200
+    assert "<h1>Dashboard</h1>" in page.text
     assert "com.example:simple-library" in page.text
     assert "org.acme:demo-client" in page.text
     assert 'href="/packages/releases/com/example/simple-library"' in page.text
     raw_storage_link = "/artifacts?repository=releases&amp;prefix=com/example/simple-library"
     assert raw_storage_link not in page.text
 
-    by_group = await storage_client.get("/packages?repository=releases&q=com.example")
+    assert "2 configured" in page.text
+    assert "2 packages" in page.text
+    assert "0 packages" in page.text
+
+    by_group = await storage_client.get("/dashboard?repository=releases&q=com.example")
     assert by_group.status_code == 200
     assert "com.example:simple-library" in by_group.text
     assert "org.acme:demo-client" not in by_group.text
 
-    by_artifact = await storage_client.get("/packages?repository=releases&q=demo-client")
+    by_artifact = await storage_client.get("/dashboard?repository=releases&q=demo-client")
     assert by_artifact.status_code == 200
     assert "org.acme:demo-client" in by_artifact.text
     assert "com.example:simple-library" not in by_artifact.text
 
-    by_version = await storage_client.get("/packages?repository=releases&q=0.1.0")
+    by_version = await storage_client.get("/dashboard?repository=releases&q=0.1.0")
     assert by_version.status_code == 200
     assert "com.example:simple-library" in by_version.text
     assert "org.acme:demo-client" not in by_version.text
@@ -467,7 +490,7 @@ async def test_package_delete_last_version_redirects_to_index(
         follow_redirects=False,
     )
     assert delete.status_code == 303
-    assert delete.headers["location"] == "/packages?repository=releases"
+    assert delete.headers["location"] == "/dashboard?repository=releases"
 
 
 @pytest.mark.asyncio
@@ -511,7 +534,7 @@ async def test_package_delete_package_removes_all_versions_metadata_and_hides_pa
         follow_redirects=False,
     )
     assert delete.status_code == 303
-    assert delete.headers["location"] == "/packages?repository=releases"
+    assert delete.headers["location"] == "/dashboard?repository=releases"
 
     version_one_jar = build_storage_key(
         "releases",
@@ -532,7 +555,7 @@ async def test_package_delete_package_removes_all_versions_metadata_and_hides_pa
     assert await store.head(version_two_sha1) is None
     assert await store.head(metadata) is None
 
-    index = await storage_client.get("/packages?repository=releases")
+    index = await storage_client.get("/dashboard?repository=releases")
     assert "com.example:remove-all" not in index.text
 
     detail = await storage_client.get("/packages/releases/com/example/remove-all")
@@ -565,7 +588,7 @@ async def test_package_actions_require_login_and_validate_repository(
 
 
 @pytest.mark.asyncio
-async def test_repositories_page_lists_policies_and_package_counts(
+async def test_repositories_page_redirects_to_dashboard(
     storage_client: AsyncClient,
 ) -> None:
     store: LocalArtifactStore = storage_client._store  # type: ignore[attr-defined]
@@ -576,17 +599,13 @@ async def test_repositories_page_lists_policies_and_package_counts(
 
     await _login(storage_client)
 
-    response = await storage_client.get("/repositories")
-    assert response.status_code == 200
-    assert "Repositories" in response.text
-    assert 'href="/repositories/releases"' in response.text
-    assert "overwrite disabled" in response.text
-    assert "overwrite allowed" in response.text
-    assert "<td>1</td>" in response.text
+    response = await storage_client.get("/repositories", follow_redirects=False)
+    assert response.status_code == 302
+    assert response.headers["location"] == "/dashboard"
 
 
 @pytest.mark.asyncio
-async def test_repository_detail_shows_setup_snippets_and_recent_packages(
+async def test_repository_detail_redirects_to_filtered_dashboard(
     storage_client: AsyncClient,
 ) -> None:
     store: LocalArtifactStore = storage_client._store  # type: ignore[attr-defined]
@@ -597,13 +616,9 @@ async def test_repository_detail_shows_setup_snippets_and_recent_packages(
 
     await _login(storage_client)
 
-    response = await storage_client.get("/repositories/releases")
-    assert response.status_code == 200
-    assert "http://test/releases" in response.text
-    assert "Maven settings.xml" in response.text
-    assert "Gradle" in response.text
-    assert "com.example:app" in response.text
-    assert 'href="/packages/releases/com/example/app"' in response.text
+    response = await storage_client.get("/repositories/releases", follow_redirects=False)
+    assert response.status_code == 302
+    assert response.headers["location"] == "/dashboard?repository=releases"
 
 
 @pytest.mark.asyncio

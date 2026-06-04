@@ -19,8 +19,6 @@
       </div>
 
       <nav class="side-nav" aria-label="Primary navigation">
-        <a class="active" href="/packages">Packages</a>
-        <a href="/repositories">Repositories</a>
         <a href="/dashboard">Dashboard</a>
         <a href="/logout">Logout</a>
       </nav>
@@ -66,7 +64,7 @@
           <p>{{ package.artifact_path }}</p>
         </div>
         <div class="page-actions">
-          <a class="button secondary" href="/packages?repository={{ package.repository }}">Back to packages</a>
+          <a class="button secondary" href="/dashboard?repository={{ package.repository }}">Back to dashboard</a>
           <a class="button secondary" href="/artifacts?repository={{ package.repository }}&amp;prefix={{ package.artifact_path }}">View raw storage path</a>
         </div>
       </header>

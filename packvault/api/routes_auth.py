@@ -43,8 +43,6 @@ def _delete_session_cookie(response: Response, state: AppState) -> None:
 
 
 def _login_success_redirect_path(redirect_url: str) -> str:
-    if redirect_url == "/dashboard":
-        return "/packages"
     return redirect_url
 
 

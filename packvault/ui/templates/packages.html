@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>PackVault — Packages</title>
+  <title>PackVault — Dashboard</title>
   {% include "_head_icons.html" %}
   <link rel="stylesheet" href="/static/app.css">
 </head>
@@ -19,9 +19,7 @@
       </div>
 
       <nav class="side-nav" aria-label="Primary navigation">
-        <a class="active" href="/packages">Packages</a>
-        <a href="/repositories">Repositories</a>
-        <a href="/dashboard">Dashboard</a>
+        <a class="active" href="/dashboard">Dashboard</a>
         <a href="/logout">Logout</a>
       </nav>
 
@@ -39,16 +37,22 @@
 
       <section class="side-card">
         <h2>Repositories</h2>
+        <p class="side-card-summary">{{ configured_repository_count }} configured</p>
         {% if repositories %}
         <ul class="repo-list">
           {% for repo in repositories %}
           <li>
-            <span class="repo-name">{{ repo.name }}</span>
-            {% if repo.allow_overwrite %}
-            <span class="badge warn">overwrite allowed</span>
-            {% else %}
-            <span class="badge safe">overwrite disabled</span>
-            {% endif %}
+            <div class="repo-row-heading">
+              <span class="repo-name">{{ repo.name }}</span>
+              <span class="repo-count">{{ repo.package_count }} package{% if repo.package_count != 1 %}s{% endif %}</span>
+            </div>
+            <div>
+              {% if repo.allow_overwrite %}
+              <span class="badge warn">overwrite allowed</span>
+              {% else %}
+              <span class="badge safe">overwrite disabled</span>
+              {% endif %}
+            </div>
           </li>
           {% endfor %}
         </ul>
@@ -61,13 +65,19 @@
     <section class="content">
       <header class="page-header">
         <div>
-          <p class="eyebrow">Maven artifacts</p>
-          <h1>Packages</h1>
+          <p class="eyebrow">Maven registry</p>
+          <h1>Dashboard</h1>
           <p>Browse Maven packages by group, artifact, and version.</p>
         </div>
       </header>
 
-      <form method="get" action="/packages" class="package-toolbar">
+      {% if setup_complete %}
+      <div class="banner success" role="status">
+        <p>PackVault initialization completed successfully.</p>
+      </div>
+      {% endif %}
+
+      <form method="get" action="/dashboard" class="package-toolbar">
         <label class="search-field">
           <span>Search packages</span>
           <input
