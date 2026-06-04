@@ -3,18 +3,26 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>PackVault — Artifacts</title>
+  <title>PackVault — Storage browser</title>
   {% include "_head_icons.html" %}
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
   <main class="container wide">
     <header class="header">
-      <h1>Artifacts</h1>
+      <div>
+        <h1>Storage browser</h1>
+        <p class="tagline">Browse raw Maven storage paths for debugging and cleanup.</p>
+      </div>
       {% with active='artifacts' %}
       {% include "_nav.html" %}
       {% endwith %}
     </header>
+
+    <div class="banner warning">
+      <p>This raw storage browser is deprecated. Use Packages for normal package browsing and cleanup.</p>
+      <a class="button secondary small" href="/dashboard?repository={{ repository }}">Open Dashboard</a>
+    </div>
 
     {% if deleted %}
     <div class="banner success" role="status">
@@ -41,7 +49,7 @@
           </select>
         </label>
         <label>
-          Path prefix
+          Storage path prefix
           <input type="text" name="prefix" value="{{ prefix }}" placeholder="com/example/myapp">
         </label>
         <label class="checkbox">
@@ -50,11 +58,11 @@
         </label>
         <button type="submit">Browse</button>
       </form>
-      <p class="hint">Browse by Maven path. Bulk deletes always remove checksum sidecars and <code>maven-metadata.xml</code> under the target.</p>
+      <p class="hint">Browse raw Maven storage paths. Bulk deletes always remove checksum sidecars and <code>maven-metadata.xml</code> under the target.</p>
     </section>
 
     <section class="card">
-      <nav class="breadcrumbs" aria-label="Artifact path">
+      <nav class="breadcrumbs" aria-label="Storage path">
         <a href="{{ artifacts_query(repository=repository, show_all=show_all) }}">{{ repository }}</a>
         {% for label, crumb_prefix in breadcrumbs %}
         <span class="sep">›</span>
@@ -164,7 +172,7 @@
       </div>
       {% endif %}
       {% else %}
-      <p>No artifacts found at this path.</p>
+      <p>No objects found at this storage path.</p>
       {% if prefix %}
       <p><a href="{{ artifacts_query(repository=repository, prefix=parent_prefix, show_all=show_all) }}">Go up</a></p>
       {% endif %}

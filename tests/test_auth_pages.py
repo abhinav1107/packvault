@@ -69,6 +69,18 @@ async def test_login_page_ignores_unknown_error_code(client: AsyncClient) -> Non
 
 
 @pytest.mark.asyncio
+async def test_successful_login_redirects_to_dashboard(client: AsyncClient) -> None:
+    response = await client.post(
+        "/login",
+        data={"username": "admin", "password": "admin"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/dashboard"
+
+
+@pytest.mark.asyncio
 async def test_logout_redirects_to_logged_out(client: AsyncClient) -> None:
     login = await client.post(
         "/login",

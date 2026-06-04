@@ -13,10 +13,14 @@ from packvault.observability.logging import audit_log
 from packvault.runtime import AppState
 from packvault.ui.artifacts import (
     breadcrumb_segments,
-    delete_under_prefix,
     list_artifact_directory,
     normalize_search_prefix,
     parent_artifact_prefix,
+)
+from packvault.ui.package_actions import (
+    delete_artifact_file,
+    delete_artifact_package,
+    delete_artifact_version,
 )
 from packvault.ui.templates_ctx import templates
 from packvault.utils.errors import BadRequestError, NotFoundError
@@ -168,7 +172,11 @@ async def delete_artifact(
     request_id = get_request_id()
 
     try:
-        await state.store.delete(maven_req.storage_key)
+        result = await delete_artifact_file(
+            state.store,
+            repository=maven_req.repository,
+            artifact_path=maven_req.artifact_path,
+        )
         audit_log(
             event="artifact_delete",
             repository=maven_req.repository,
@@ -179,6 +187,7 @@ async def delete_artifact(
             status_code=200,
             request_id=request_id,
             scope="file",
+            deleted_count=result.deleted_count,
         )
     except NotFoundError:
         audit_log(
@@ -264,23 +273,24 @@ async def delete_versions(
         return auth_result
     user = auth_result
 
-    if not versions:
-        raise BadRequestError("Select at least one version to delete")
-
     artifact_prefix = normalize_search_prefix(prefix)
-    total_deleted = 0
     principal = _principal_name(user)
     client_ip = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
     request_id = get_request_id()
 
+    if not versions:
+        raise BadRequestError("Select at least one version to delete")
+
+    total_deleted = 0
     for version in versions:
         version_prefix = normalize_search_prefix(f"{artifact_prefix}/{version}")
         try:
-            result = await delete_under_prefix(
+            result = await delete_artifact_version(
                 state.store,
                 repository=repository,
-                path_prefix=version_prefix,
+                artifact_path=artifact_prefix,
+                version=version,
             )
         except NotFoundError:
             continue
@@ -335,11 +345,23 @@ async def _delete_scoped_prefix(
     request_id = get_request_id()
 
     try:
-        result = await delete_under_prefix(
-            state.store,
-            repository=repository,
-            path_prefix=normalized_prefix,
-        )
+        if scope == "version":
+            artifact_path = parent_artifact_prefix(normalized_prefix)
+            version = normalized_prefix.rsplit("/", 1)[-1]
+            result = await delete_artifact_version(
+                state.store,
+                repository=repository,
+                artifact_path=artifact_path,
+                version=version,
+            )
+        elif scope == "artifact":
+            result = await delete_artifact_package(
+                state.store,
+                repository=repository,
+                artifact_path=normalized_prefix,
+            )
+        else:
+            raise BadRequestError("Invalid delete scope")
         audit_log(
             event="artifact_delete",
             repository=repository,
