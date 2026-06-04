@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PackVault — Repositories</title>
+  {% include "_head_icons.html" %}
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main class="container wide">
+    <header class="header">
+      <div>
+        <h1>Repositories</h1>
+        <p class="tagline">Repository policies, package counts, and setup details.</p>
+      </div>
+      {% with active='repositories' %}
+      {% include "_nav.html" %}
+      {% endwith %}
+    </header>
+
+    <section class="card package-card">
+      <div class="table-header">
+        <div>
+          <h2>Repository index</h2>
+          <p>{{ repositories|length }} configured {% if repositories|length == 1 %}repository{% else %}repositories{% endif %}</p>
+        </div>
+      </div>
+
+      {% if repositories %}
+      <table class="packages-table">
+        <thead>
+          <tr>
+            <th>Repository</th>
+            <th>Policy</th>
+            <th>Packages</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for repo in repositories %}
+          <tr>
+            <td><a class="package-name" href="/repositories/{{ repo.name }}">{{ repo.name }}</a></td>
+            <td>
+              {% if repo.allow_overwrite %}
+              <span class="badge warn">overwrite allowed</span>
+              {% else %}
+              <span class="badge safe">overwrite disabled</span>
+              {% endif %}
+            </td>
+            <td>{{ repo.package_count }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="empty-state">
+        <h2>No repositories configured</h2>
+      </div>
+      {% endif %}
+    </section>
+  </main>
+</body>
+</html>

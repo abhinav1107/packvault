@@ -33,7 +33,7 @@
       </div>
       <div class="dashboard-actions">
         <a class="button" href="/packages">Open Packages</a>
-        <a class="button secondary" href="/artifacts">Open Storage browser</a>
+        <a class="button secondary" href="/repositories">Open Repositories</a>
       </div>
     </section>
 
@@ -71,135 +71,6 @@
       </section>
     </section>
 
-    <section class="card">
-      <h2>Repository setup snippets</h2>
-      <p class="hint">These snippets are kept here for now. Future package and repository detail pages can provide more contextual Maven and Gradle setup instructions.</p>
-    </section>
-
-    {% for s in snippets %}
-    <section class="card setup-snippet">
-      <details>
-        <summary>
-          <span>{{ s.name }}</span>
-          <code>{{ s.url }}</code>
-        </summary>
-        <div class="snippet-body">
-          <p><strong>URL:</strong> <code>{{ s.url }}</code></p>
-          <h3>Gradle</h3>
-          <pre><code>{{ s.gradle }}</code></pre>
-          <h3>Maven settings.xml</h3>
-          <pre><code>{{ s.maven }}</code></pre>
-        </div>
-      </details>
-    </section>
-    {% endfor %}
-  </main>
+</main>
 </body>
 </html>
-/* Dashboard cleanup */
-.dashboard-hero {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1.5rem;
-}
-
-.dashboard-hero h2 {
-  margin: 0;
-  font-size: 1.35rem;
-}
-
-.dashboard-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  justify-content: flex-end;
-}
-
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
-}
-
-.summary-list {
-  margin: 0;
-}
-
-.summary-list dt {
-  color: #8b98a8;
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.summary-list dd {
-  margin: 0 0 0.75rem;
-  font-weight: 700;
-}
-
-.summary-list dd:last-child {
-  margin-bottom: 0;
-}
-
-.repo-summary-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 0.75rem;
-}
-
-.repo-summary-list li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.setup-snippet {
-  padding: 0;
-  overflow: hidden;
-}
-
-.setup-snippet details {
-  padding: 0;
-}
-
-.setup-snippet summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 1rem 1.25rem;
-  cursor: pointer;
-  font-weight: 700;
-}
-
-.setup-snippet summary code {
-  color: #9aa7b5;
-  font-weight: 500;
-  overflow-wrap: anywhere;
-}
-
-.snippet-body {
-  border-top: 1px solid #2a3544;
-  padding: 1rem 1.25rem;
-}
-
-@media (max-width: 760px) {
-  .dashboard-hero,
-  .repo-summary-list li,
-  .setup-snippet summary {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .dashboard-actions {
-    justify-content: flex-start;
-  }
-
-  .dashboard-grid {
-    grid-template-columns: 1fr;
-  }
-}

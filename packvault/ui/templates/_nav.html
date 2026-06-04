@@ -1,5 +1,6 @@
 <nav class="nav-links" aria-label="Main">
+  <a href="/packages"{% if active == 'packages' %} class="active"{% endif %}>Packages</a>
+  <a href="/repositories"{% if active == 'repositories' %} class="active"{% endif %}>Repositories</a>
   <a href="/dashboard"{% if active == 'dashboard' %} class="active"{% endif %}>Dashboard</a>
-  <a href="/artifacts"{% if active == 'artifacts' %} class="active"{% endif %}>Artifacts</a>
   <a href="/logout">Logout</a>
 </nav>

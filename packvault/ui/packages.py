@@ -12,11 +12,10 @@ Maven object paths into package-oriented summaries such as:
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from functools import cmp_to_key
 from pathlib import PurePosixPath
-from typing import Iterable
-
 
 VISIBLE_ARTIFACT_SUFFIXES = (".jar", ".pom")
 IGNORED_FILENAMES = {"maven-metadata.xml"}
@@ -45,7 +44,6 @@ class PackageCoordinates:
         return f"{self.group_id}:{self.artifact_id}"
 
 
-
 @dataclass(frozen=True)
 class PackageSummary:
     """Human-friendly summary for one Maven package in one repository."""
@@ -70,7 +68,6 @@ class PackageSummary:
         return f"{self.group_path}/{self.artifact_id}"
 
 
-
 @dataclass(frozen=True)
 class PackageVersionSummary:
     """Human-friendly summary for one version of a Maven package."""
@@ -78,6 +75,28 @@ class PackageVersionSummary:
     version: str
     path: str
     files: tuple[str, ...]
+
+
+def artifact_file_type(filename: str) -> str:
+    """Return a short user-facing label for a Maven artifact file."""
+    if filename.endswith("-sources.jar"):
+        return "Sources"
+    if filename.endswith("-javadoc.jar"):
+        return "Javadoc"
+    if filename.endswith(".jar"):
+        return "JAR"
+    if filename.endswith(".pom"):
+        return "POM"
+    return "File"
+
+
+def artifact_file_download_path(
+    repository: str,
+    version_path: str,
+    filename: str,
+) -> str:
+    """Return the Maven API path for downloading a visible package file."""
+    return f"/{repository}/{version_path.strip('/')}/{filename.strip('/')}"
 
 
 @dataclass(frozen=True)
@@ -282,7 +301,7 @@ def _compare_versions(left: str, right: str) -> int:
     left_parts = _version_parts(left)
     right_parts = _version_parts(right)
 
-    for left_part, right_part in zip(left_parts, right_parts):
+    for left_part, right_part in zip(left_parts, right_parts, strict=False):
         if left_part == right_part:
             continue
 

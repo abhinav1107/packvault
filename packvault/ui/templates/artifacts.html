@@ -19,6 +19,11 @@
       {% endwith %}
     </header>
 
+    <div class="banner warning">
+      <p>This raw storage browser is deprecated. Use Packages for normal package browsing and cleanup.</p>
+      <a class="button secondary small" href="/packages?repository={{ repository }}">Open Packages</a>
+    </div>
+
     {% if deleted %}
     <div class="banner success" role="status">
       {% if delete_scope == 'artifact' %}

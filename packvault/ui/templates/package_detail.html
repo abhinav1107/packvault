@@ -20,7 +20,7 @@
 
       <nav class="side-nav" aria-label="Primary navigation">
         <a class="active" href="/packages">Packages</a>
-        <a href="/artifacts">Storage browser</a>
+        <a href="/repositories">Repositories</a>
         <a href="/dashboard">Dashboard</a>
         <a href="/logout">Logout</a>
       </nav>
@@ -135,20 +135,59 @@
             </summary>
 
             <div class="version-files-expanded">
-              <div>
+              <div class="version-files-panel">
                 <h3>Artifact files</h3>
                 <div class="file-list">
                   {% for file in version.files %}
-                  <code>{{ file }}</code>
+                  <div class="file-row">
+                    <span class="file-type">{{ artifact_file_type(file) }}</span>
+                    <code>{{ file }}</code>
+                    <a class="button small secondary" href="{{ artifact_file_download_path(package.repository, version.path, file) }}">Download</a>
+                  </div>
                   {% endfor %}
                 </div>
               </div>
 
-              <a class="button small secondary" href="/artifacts?repository={{ package.repository }}&amp;prefix={{ version.path }}">Open in storage browser</a>
+              <div class="drawer-actions">
+                <section>
+                  <h3>Advanced</h3>
+                  <a class="button small secondary" href="/artifacts?repository={{ package.repository }}&amp;prefix={{ version.path }}">Open in storage browser</a>
+                </section>
+
+                <section>
+                  <h3>Danger zone</h3>
+                  <form
+                    method="post"
+                    action="/package-actions/delete-version"
+                    class="delete-form"
+                    onsubmit="return confirm('Delete version {{ version.version }} of {{ package.package_name }}? This cannot be undone.');"
+                  >
+                    <input type="hidden" name="repository" value="{{ package.repository }}">
+                    <input type="hidden" name="artifact_path" value="{{ package.artifact_path }}">
+                    <input type="hidden" name="version" value="{{ version.version }}">
+                    <button type="submit" class="button danger small">Delete version {{ version.version }}</button>
+                  </form>
+                </section>
+              </div>
             </div>
           </details>
           {% endfor %}
         </div>
+      </section>
+
+      <section class="card danger-zone">
+        <h2>Danger zone</h2>
+        <p>Delete all versions and files for <code>{{ package.package_name }}</code>.</p>
+        <form
+          method="post"
+          action="/package-actions/delete-package"
+          class="delete-form"
+          onsubmit="return confirm('Delete package {{ package.package_name }} and all versions? This cannot be undone.');"
+        >
+          <input type="hidden" name="repository" value="{{ package.repository }}">
+          <input type="hidden" name="artifact_path" value="{{ package.artifact_path }}">
+          <button type="submit" class="button danger">Delete package {{ package.package_name }}</button>
+        </form>
       </section>
     </section>
   </main>

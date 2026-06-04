@@ -1,5 +1,7 @@
 from packvault.ui.packages import (
     PackageCoordinates,
+    artifact_file_download_path,
+    artifact_file_type,
     build_package_detail,
     build_package_summaries,
     infer_package_from_path,
@@ -199,3 +201,22 @@ def test_build_package_detail_returns_none_for_missing_package() -> None:
 
 def test_build_package_detail_returns_none_for_invalid_artifact_path() -> None:
     assert build_package_detail("releases", "simple-library", []) is None
+
+
+def test_artifact_file_type_labels_specific_jars_before_generic_jar() -> None:
+    assert artifact_file_type("demo-1.0.0-sources.jar") == "Sources"
+    assert artifact_file_type("demo-1.0.0-javadoc.jar") == "Javadoc"
+    assert artifact_file_type("demo-1.0.0.jar") == "JAR"
+    assert artifact_file_type("demo-1.0.0.pom") == "POM"
+    assert artifact_file_type("README.txt") == "File"
+
+
+def test_artifact_file_download_path_points_to_maven_artifact_url() -> None:
+    assert (
+        artifact_file_download_path(
+            "releases",
+            "com/example/demo/1.0.0",
+            "demo-1.0.0.jar",
+        )
+        == "/releases/com/example/demo/1.0.0/demo-1.0.0.jar"
+    )
