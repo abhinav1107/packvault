@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PackVault — {{ package.package_name }}</title>
+  {% include "_head_icons.html" %}
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">PV</div>
+        <div>
+          <strong>PackVault</strong>
+          <span>Maven registry</span>
+        </div>
+      </div>
+
+      <nav class="side-nav" aria-label="Primary navigation">
+        <a class="active" href="/packages">Packages</a>
+        <a href="/artifacts">Storage browser</a>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/logout">Logout</a>
+      </nav>
+
+      <section class="side-card">
+        <h2>Signed in</h2>
+        <dl>
+          <dt>User</dt>
+          <dd>{{ user.name or user.subject }}</dd>
+          <dt>Auth Provider</dt>
+          <dd>{{ user.provider }}</dd>
+          <dt>Storage backend</dt>
+          <dd>{{ storage_backend }}</dd>
+        </dl>
+      </section>
+
+      <section class="side-card">
+        <h2>Repositories</h2>
+        {% if repositories %}
+        <ul class="repo-list">
+          {% for repo in repositories %}
+          <li>
+            <span class="repo-name">{{ repo.name }}</span>
+            {% if repo.allow_overwrite %}
+            <span class="badge warn">overwrite allowed</span>
+            {% else %}
+            <span class="badge safe">overwrite disabled</span>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="muted">No repositories configured.</p>
+        {% endif %}
+      </section>
+    </aside>
+
+    <section class="content">
+      <header class="page-header package-detail-header">
+        <div>
+          <p class="eyebrow">Package detail</p>
+          <h1>{{ package.package_name }}</h1>
+          <p>{{ package.artifact_path }}</p>
+        </div>
+        <div class="page-actions">
+          <a class="button secondary" href="/packages?repository={{ package.repository }}">Back to packages</a>
+          <a class="button secondary" href="/artifacts?repository={{ package.repository }}&amp;prefix={{ package.artifact_path }}">View raw storage path</a>
+        </div>
+      </header>
+
+      <section class="detail-summary-grid">
+        <section class="card metric-card">
+          <span>Repository</span>
+          <strong>{{ package.repository }}</strong>
+        </section>
+        <section class="card metric-card">
+          <span>Latest version</span>
+          <strong>{{ package.latest_version }}</strong>
+        </section>
+        <section class="card metric-card">
+          <span>Versions</span>
+          <strong>{{ package.version_count }}</strong>
+        </section>
+      </section>
+
+      <section class="detail-grid">
+        <section class="card dependency-card">
+          <div class="table-header">
+            <div>
+              <h2>Maven dependency</h2>
+              <p>Use the latest available version.</p>
+            </div>
+          </div>
+          <pre><code>{{ package.maven_dependency }}</code></pre>
+        </section>
+
+        <section class="card dependency-card">
+          <div class="table-header">
+            <div>
+              <h2>Gradle dependency</h2>
+              <p>Use the latest available version.</p>
+            </div>
+          </div>
+          <pre><code>{{ package.gradle_dependency }}</code></pre>
+        </section>
+      </section>
+
+      <section class="card package-card">
+        <div class="table-header">
+          <div>
+            <h2>Versions</h2>
+            <p>{{ package.version_count }} version(s) available for this package.</p>
+          </div>
+        </div>
+
+        <div class="version-list" role="list">
+          <div class="version-list-header" aria-hidden="true">
+            <span>Version</span>
+            <span>Storage path</span>
+            <span>Files</span>
+          </div>
+
+          {% for version in package.versions %}
+          <details class="version-row-drawer" role="listitem">
+            <summary class="version-summary-row">
+              <span><span class="version-pill">{{ version.version }}</span></span>
+              <code>{{ version.path }}</code>
+              <span class="drawer-meta">
+                <span class="drawer-chevron" aria-hidden="true"></span>
+                {{ version.files|length }} file{% if version.files|length != 1 %}s{% endif %}
+              </span>
+            </summary>
+
+            <div class="version-files-expanded">
+              <div>
+                <h3>Artifact files</h3>
+                <div class="file-list">
+                  {% for file in version.files %}
+                  <code>{{ file }}</code>
+                  {% endfor %}
+                </div>
+              </div>
+
+              <a class="button small secondary" href="/artifacts?repository={{ package.repository }}&amp;prefix={{ version.path }}">Open in storage browser</a>
+            </div>
+          </details>
+          {% endfor %}
+        </div>
+      </section>
+    </section>
+  </main>
+</body>
+</html>

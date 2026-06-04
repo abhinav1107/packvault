@@ -45,6 +45,7 @@ class PackageCoordinates:
         return f"{self.group_id}:{self.artifact_id}"
 
 
+
 @dataclass(frozen=True)
 class PackageSummary:
     """Human-friendly summary for one Maven package in one repository."""
@@ -67,6 +68,59 @@ class PackageSummary:
     def artifact_path(self) -> str:
         """Return the storage prefix containing all versions of this artifact."""
         return f"{self.group_path}/{self.artifact_id}"
+
+
+
+@dataclass(frozen=True)
+class PackageVersionSummary:
+    """Human-friendly summary for one version of a Maven package."""
+
+    version: str
+    path: str
+    files: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class PackageDetail:
+    """Human-friendly detail view for one Maven package."""
+
+    repository: str
+    group_id: str
+    group_path: str
+    artifact_id: str
+    latest_version: str
+    versions: tuple[PackageVersionSummary, ...]
+
+    @property
+    def package_name(self) -> str:
+        """Return the Maven package name in groupId:artifactId format."""
+        return f"{self.group_id}:{self.artifact_id}"
+
+    @property
+    def artifact_path(self) -> str:
+        """Return the storage prefix containing all versions of this artifact."""
+        return f"{self.group_path}/{self.artifact_id}"
+
+    @property
+    def version_count(self) -> int:
+        """Return the number of versions available for this package."""
+        return len(self.versions)
+
+    @property
+    def maven_dependency(self) -> str:
+        """Return a Maven dependency snippet for the latest version."""
+        return (
+            "<dependency>\n"
+            f"  <groupId>{self.group_id}</groupId>\n"
+            f"  <artifactId>{self.artifact_id}</artifactId>\n"
+            f"  <version>{self.latest_version}</version>\n"
+            "</dependency>"
+        )
+
+    @property
+    def gradle_dependency(self) -> str:
+        """Return a Gradle dependency snippet for the latest version."""
+        return f'implementation("{self.group_id}:{self.artifact_id}:{self.latest_version}")'
 
 
 def infer_package_from_path(repository: str, path: str) -> PackageCoordinates | None:
@@ -151,6 +205,66 @@ def build_package_summaries(repository: str, paths: Iterable[str]) -> list[Packa
         )
 
     return sorted(summaries, key=lambda package: package.package_name)
+
+
+def build_package_detail(
+    repository: str,
+    artifact_path: str,
+    paths: Iterable[str],
+) -> PackageDetail | None:
+    """Build package detail from Maven storage object paths under one artifact.
+
+    The artifact_path is the Maven path without the version, for example:
+
+        com/example/simple-library
+
+    Returns None when no primary Maven artifact files are found for that package.
+    """
+    normalized_artifact_path = artifact_path.strip("/")
+    artifact_parts = PurePosixPath(normalized_artifact_path).parts
+    if len(artifact_parts) < 2:
+        return None
+
+    artifact_id = artifact_parts[-1]
+    group_parts = artifact_parts[:-1]
+    group_path = "/".join(group_parts)
+    group_id = ".".join(group_parts)
+
+    version_files: dict[str, set[str]] = {}
+
+    for path in paths:
+        coordinates = infer_package_from_path(repository, path)
+        if coordinates is None:
+            continue
+        if coordinates.group_path != group_path:
+            continue
+        if coordinates.artifact_id != artifact_id:
+            continue
+
+        filename = PurePosixPath(path).name
+        version_files.setdefault(coordinates.version, set()).add(filename)
+
+    if not version_files:
+        return None
+
+    sorted_versions = sort_maven_versions(version_files)
+    version_summaries = tuple(
+        PackageVersionSummary(
+            version=version,
+            path=f"{normalized_artifact_path}/{version}",
+            files=tuple(sorted(version_files[version])),
+        )
+        for version in reversed(sorted_versions)
+    )
+
+    return PackageDetail(
+        repository=repository,
+        group_id=group_id,
+        group_path=group_path,
+        artifact_id=artifact_id,
+        latest_version=sorted_versions[-1],
+        versions=version_summaries,
+    )
 
 
 def sort_maven_versions(versions: Iterable[str]) -> list[str]:

@@ -1,5 +1,6 @@
 from packvault.ui.packages import (
     PackageCoordinates,
+    build_package_detail,
     build_package_summaries,
     infer_package_from_path,
     sort_maven_versions,
@@ -126,3 +127,75 @@ def test_sort_maven_versions_is_deterministic_for_mixed_qualifiers() -> None:
         "1.0.0-alpha",
         "1.0.0-SNAPSHOT",
     ]
+
+
+def test_build_package_detail_returns_latest_version_and_dependency_snippets() -> None:
+    detail = build_package_detail(
+        "releases",
+        "com/example/simple-library",
+        [
+            "com/example/simple-library/0.1.0/simple-library-0.1.0.jar",
+            "com/example/simple-library/0.1.0/simple-library-0.1.0.pom",
+            "com/example/simple-library/0.2.0/simple-library-0.2.0.jar",
+            "com/example/simple-library/0.2.0/simple-library-0.2.0.pom",
+            "com/example/simple-library/0.2.0/simple-library-0.2.0.jar.sha1",
+        ],
+    )
+
+    assert detail is not None
+    assert detail.repository == "releases"
+    assert detail.group_id == "com.example"
+    assert detail.group_path == "com/example"
+    assert detail.artifact_id == "simple-library"
+    assert detail.package_name == "com.example:simple-library"
+    assert detail.artifact_path == "com/example/simple-library"
+    assert detail.latest_version == "0.2.0"
+    assert detail.version_count == 2
+    assert [version.version for version in detail.versions] == ["0.2.0", "0.1.0"]
+    assert detail.versions[0].path == "com/example/simple-library/0.2.0"
+    assert detail.versions[0].files == (
+        "simple-library-0.2.0.jar",
+        "simple-library-0.2.0.pom",
+    )
+    assert detail.maven_dependency == (
+        "<dependency>\n"
+        "  <groupId>com.example</groupId>\n"
+        "  <artifactId>simple-library</artifactId>\n"
+        "  <version>0.2.0</version>\n"
+        "</dependency>"
+    )
+    assert detail.gradle_dependency == 'implementation("com.example:simple-library:0.2.0")'
+
+
+def test_build_package_detail_ignores_other_packages() -> None:
+    detail = build_package_detail(
+        "releases",
+        "com/example/simple-library",
+        [
+            "com/example/simple-library/0.1.0/simple-library-0.1.0.jar",
+            "com/example/other-library/9.9.9/other-library-9.9.9.jar",
+            "org/acme/simple-library/8.8.8/simple-library-8.8.8.jar",
+        ],
+    )
+
+    assert detail is not None
+    assert detail.package_name == "com.example:simple-library"
+    assert detail.latest_version == "0.1.0"
+    assert detail.version_count == 1
+    assert [version.version for version in detail.versions] == ["0.1.0"]
+
+
+def test_build_package_detail_returns_none_for_missing_package() -> None:
+    detail = build_package_detail(
+        "releases",
+        "com/example/missing-library",
+        [
+            "com/example/simple-library/0.1.0/simple-library-0.1.0.jar",
+        ],
+    )
+
+    assert detail is None
+
+
+def test_build_package_detail_returns_none_for_invalid_artifact_path() -> None:
+    assert build_package_detail("releases", "simple-library", []) is None

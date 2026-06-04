@@ -8,9 +8,12 @@
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
-  <main class="container">
+  <main class="container wide">
     <header class="header">
-      <h1>Dashboard</h1>
+      <div>
+        <h1>Dashboard</h1>
+        <p class="tagline">Runtime status and repository configuration summary.</p>
+      </div>
       {% with active='dashboard' %}
       {% include "_nav.html" %}
       {% endwith %}
@@ -22,32 +25,181 @@
     </div>
     {% endif %}
 
-    <section class="card">
-      <h2>Signed in</h2>
-      <p><strong>User:</strong> {{ user.name or user.subject }}</p>
-      <p><strong>Auth Provider:</strong> {{ user.provider }}</p>
-      <p><strong>Storage backend:</strong> {{ storage_backend }}</p>
+    <section class="card dashboard-hero">
+      <div>
+        <p class="eyebrow">Primary workspace</p>
+        <h2>Browse packages from the package registry view</h2>
+        <p class="hint">Use Packages for normal Maven package discovery. Use Storage browser only when you need to inspect raw Maven object paths or perform cleanup.</p>
+      </div>
+      <div class="dashboard-actions">
+        <a class="button" href="/packages">Open Packages</a>
+        <a class="button secondary" href="/artifacts">Open Storage browser</a>
+      </div>
+    </section>
+
+    <section class="dashboard-grid">
+      <section class="card">
+        <h2>Signed in</h2>
+        <dl class="summary-list">
+          <dt>User</dt>
+          <dd>{{ user.name or user.subject }}</dd>
+          <dt>Auth Provider</dt>
+          <dd>{{ user.provider }}</dd>
+          <dt>Storage backend</dt>
+          <dd>{{ storage_backend }}</dd>
+        </dl>
+      </section>
+
+      <section class="card">
+        <h2>Repositories</h2>
+        {% if repositories %}
+        <ul class="repo-summary-list">
+          {% for repo in repositories %}
+          <li>
+            <code>{{ repo.name }}</code>
+            {% if repo.allow_overwrite %}
+            <span class="badge warn">overwrite allowed</span>
+            {% else %}
+            <span class="badge safe">overwrite disabled</span>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="hint">No repositories configured.</p>
+        {% endif %}
+      </section>
     </section>
 
     <section class="card">
-      <h2>Repositories</h2>
-      <ul>
-        {% for repo in repositories %}
-        <li><code>{{ repo.name }}</code> — overwrite {% if repo.allow_overwrite %}allowed{% else %}disabled{% endif %}</li>
-        {% endfor %}
-      </ul>
+      <h2>Repository setup snippets</h2>
+      <p class="hint">These snippets are kept here for now. Future package and repository detail pages can provide more contextual Maven and Gradle setup instructions.</p>
     </section>
 
     {% for s in snippets %}
-    <section class="card">
-      <h2>{{ s.name }}</h2>
-      <p><strong>URL:</strong> <code>{{ s.url }}</code></p>
-      <h3>Gradle</h3>
-      <pre><code>{{ s.gradle }}</code></pre>
-      <h3>Maven settings.xml</h3>
-      <pre><code>{{ s.maven }}</code></pre>
+    <section class="card setup-snippet">
+      <details>
+        <summary>
+          <span>{{ s.name }}</span>
+          <code>{{ s.url }}</code>
+        </summary>
+        <div class="snippet-body">
+          <p><strong>URL:</strong> <code>{{ s.url }}</code></p>
+          <h3>Gradle</h3>
+          <pre><code>{{ s.gradle }}</code></pre>
+          <h3>Maven settings.xml</h3>
+          <pre><code>{{ s.maven }}</code></pre>
+        </div>
+      </details>
     </section>
     {% endfor %}
   </main>
 </body>
 </html>
+/* Dashboard cleanup */
+.dashboard-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.dashboard-hero h2 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.dashboard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.summary-list {
+  margin: 0;
+}
+
+.summary-list dt {
+  color: #8b98a8;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.summary-list dd {
+  margin: 0 0 0.75rem;
+  font-weight: 700;
+}
+
+.summary-list dd:last-child {
+  margin-bottom: 0;
+}
+
+.repo-summary-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.repo-summary-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.setup-snippet {
+  padding: 0;
+  overflow: hidden;
+}
+
+.setup-snippet details {
+  padding: 0;
+}
+
+.setup-snippet summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.setup-snippet summary code {
+  color: #9aa7b5;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.snippet-body {
+  border-top: 1px solid #2a3544;
+  padding: 1rem 1.25rem;
+}
+
+@media (max-width: 760px) {
+  .dashboard-hero,
+  .repo-summary-list li,
+  .setup-snippet summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .dashboard-actions {
+    justify-content: flex-start;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}

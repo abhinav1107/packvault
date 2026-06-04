@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
 from packvault.api.deps import get_optional_session, get_state
@@ -10,10 +10,20 @@ from packvault.auth.permissions import SessionUser
 from packvault.runtime import AppState
 from packvault.ui.branding import STATIC_FAVICON_PATH
 from packvault.ui.artifacts import artifact_path_from_key, list_keys_under_prefix
-from packvault.ui.packages import PackageSummary, build_package_summaries
+from packvault.ui.packages import (
+    PackageSummary,
+    build_package_detail,
+    build_package_summaries,
+)
 from packvault.ui.templates_ctx import templates
 
 router = APIRouter(tags=["ui"])
+
+
+def _primary_app_path(redirect_url: str) -> str:
+    if redirect_url == "/dashboard":
+        return "/packages"
+    return redirect_url
 
 
 def _repository_summaries(state: AppState) -> list[dict]:
@@ -211,6 +221,42 @@ async def packages_page(
             "packages": packages,
             "query": query,
             "sort": sort,
+            "providers": state.settings.auth.providers,
+            "storage_backend": state.settings.storage.backend,
+        },
+    )
+
+
+
+@router.get("/packages/{repository}/{package_path:path}", response_class=HTMLResponse)
+async def package_detail_page(
+    repository: str,
+    package_path: str,
+    request: Request,
+    user: SessionUser | None = Depends(get_optional_session),
+    state: AppState = Depends(get_state),
+):
+    if user is None:
+        return RedirectResponse("/login", status_code=302)
+
+    if repository not in state.repositories.names:
+        raise HTTPException(status_code=404, detail="Repository not found")
+
+    keys = await list_keys_under_prefix(state.store, repository)
+    artifact_paths = [artifact_path_from_key(key, repository) for key in keys]
+    package = build_package_detail(repository, package_path, artifact_paths)
+
+    if package is None:
+        raise HTTPException(status_code=404, detail="Package not found")
+
+    return templates.TemplateResponse(
+        request,
+        "package_detail.html",
+        {
+            "user": user,
+            "repositories": _repository_summaries(state),
+            "repository": repository,
+            "package": package,
             "providers": state.settings.auth.providers,
             "storage_backend": state.settings.storage.backend,
         },
